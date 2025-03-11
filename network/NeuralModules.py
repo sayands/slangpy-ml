@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from slangpy.backend import Device, DataType
 from slangpy.types import Tensor, NDBuffer
-from typing import Optional, Any
+from typing import Optional, List, Dict, Any
 import numpy as np
 import math
 
@@ -190,6 +190,85 @@ class LinearLayer(NeuralModule):
             "weightGrads": self.weights.grad_out.storage,
             "biasGrads": self.biases.grad_out.storage,
             "_type": f"LinearLayer<{dtype_name(self.dtype)}, {self.fan_in}, {self.fan_out}> "
+        }
+
+class Conv2DLayer(NeuralModule):
+    def __init__(self, 
+                 in_channels: int, 
+                 out_channels: int, 
+                 kernel_size: int, 
+                 input_height: int, 
+                 input_width: int, 
+                 stride: int = 1, 
+                 padding: int = 0, 
+                 dtype: DataType = DataType.float32):
+        # Calculate output dimensions
+        output_height = (input_height + 2 * padding - kernel_size) // stride + 1
+        output_width = (input_width + 2 * padding - kernel_size) // stride + 1
+
+        super().__init__(
+            fan_in=in_channels * input_height * input_width,
+            fan_out=out_channels * output_height * output_width,
+            dtype=dtype
+        )
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.input_height = input_height
+        self.input_width = input_width
+        self.stride = stride
+        self.padding = padding
+
+        self.weights: Optional[Tensor] = None
+        self.biases: Optional[Tensor] = None
+
+    def initialize(self, device: Device):
+        # Xavier uniform initialization for weights
+        std = math.sqrt(2.0 / (self.in_channels * self.kernel_size * self.kernel_size + self.out_channels))
+        a = math.sqrt(3.0) * std
+        weights_np = np.random.uniform(
+            -a, a, 
+            (self.out_channels, self.in_channels, self.kernel_size, self.kernel_size)
+        ).astype(dtype_to_numpy(self.dtype))
+
+        # Zero initialization for biases
+        biases_np = np.zeros((self.out_channels,), dtype=dtype_to_numpy(self.dtype))
+
+        # Create tensors on the device
+        self.weights = Tensor.empty(
+            device, 
+            weights_np.shape, 
+            dtype_name(self.dtype)
+        ).with_grads(zero=True)
+        self.biases = Tensor.empty(
+            device, 
+            biases_np.shape, 
+            dtype_name(self.dtype)
+        ).with_grads(zero=True)
+
+        # Copy data from numpy arrays to device tensors
+        self.weights.storage.copy_from_numpy(weights_np)
+        self.biases.storage.copy_from_numpy(biases_np)
+
+    def parameters(self) -> List[Tensor]:
+        return [self.weights, self.biases]
+
+    def get_this(self) -> Dict[str, Any]:
+        if self.weights is None:
+            raise RuntimeError("Conv2DLayer is not initialized!")
+
+        return {
+            "weights": self.weights.storage,
+            "biases": self.biases.storage,
+            "weightGrads": self.weights.grad_out.storage,
+            "biasGrads": self.biases.grad_out.storage,
+            "_type": (
+                f"Conv2DLayer<{dtype_name(self.dtype)}, "
+                f"{self.in_channels}, {self.input_height}, {self.input_width}, "
+                f"{self.out_channels}, {self.kernel_size}, {self.kernel_size}, "
+                f"{self.stride}, {self.padding}>"
+            )
         }
 
 

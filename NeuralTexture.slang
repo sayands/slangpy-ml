@@ -4,6 +4,7 @@
 __exported import network.NeuralModules;
 __exported import network.Activations;
 __exported import network.MLP;
+__exported import network.Conv2D;
 __exported import network.Encodings;
 __exported import network.Losses;
 

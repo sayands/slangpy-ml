@@ -8,4 +8,5 @@ xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ -
 xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 6
 xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 7
 
+# Inference
 # xvfb-run python main.py --mode inference --save_path my_model.npz --resolution 512

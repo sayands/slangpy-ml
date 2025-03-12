@@ -62,3 +62,12 @@ void trainTexture<Model : IModule<float, 2, 3>>(Model model, inout RNG rng, Text
 
     bwd_diff(evalModelAndLoss)(model, inputUV, target.rgb, lossScale);
 }
+
+float4 evalMipLevel<Model : IModule<float, 2, 3>>(Model model_floor, Model model_ceil, float2 inputUV, float alpha)
+{
+    let prediction_floor = model_floor.forward(inputUV);
+    let prediction_ceil = model_ceil.forward(inputUV);
+
+    let prediction = lerp(prediction_floor, prediction_ceil, alpha);
+    return float4(prediction, 1.0);
+}

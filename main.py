@@ -147,14 +147,26 @@ def load_model_weights(model, filename):
     
     print(f"Model weights loaded from {filename}")
 
-def inference_main(model_path, output_image_path, resolution=512):
+def inference_main(model_path_base, lod, output_image_path, resolution=512):
     """Run inference with a saved model and save the output as an image."""
     # Create app with window, just like in training
     app = App("Neural Texture Inference", device_type=DeviceType.vulkan, width=resolution, height=resolution)
     device = app.device
     
     # Create the model with the same architecture as during training
-    model = ModuleChain(
+    floor_model = ModuleChain(
+        FrequencyEncoding(2, 5),
+        LinearLayer(20, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 3),
+        SigmoidAct(3)
+    )
+
+    ceil_model = ModuleChain(
         FrequencyEncoding(2, 5),
         LinearLayer(20, 64),
         LeakyReLUAct(64),
@@ -167,10 +179,19 @@ def inference_main(model_path, output_image_path, resolution=512):
     )
     
     # Initialize the model (allocate storage for parameters)
-    model.initialize(device)
+    floor_model.initialize(device)
+    ceil_model.initialize(device)
     
     # Load the saved weights
-    load_model_weights(model, model_path)
+    floor_mip_level = math.floor(lod)
+    floor_model_path = os.path.join(model_path_base, f"model_{floor_mip_level}.npz")
+    load_model_weights(floor_model, floor_model_path)
+
+    ceil_mip_level = math.ceil(lod)
+    ceil_model_path = os.path.join(model_path_base, f"model_{ceil_mip_level}.npz")
+    load_model_weights(ceil_model, ceil_model_path)
+
+    alpha = lod - floor_mip_level
     
     # Create a UV grid for evaluation, just like in training
     uv_grid = create_uv_grid(device, resolution)
@@ -181,7 +202,7 @@ def inference_main(model_path, output_image_path, resolution=512):
     device.wait()
     
     # Evaluate the model once to generate the texture
-    module.evalModel(model, uv_grid, _result=app.output)
+    module.evalMipLevel(floor_model, ceil_model, uv_grid, alpha, _result=app.output)
 
     # Convert the output texture to a bitmap and save it
     bitmap = app.output.to_bitmap()
@@ -192,11 +213,11 @@ def inference_main(model_path, output_image_path, resolution=512):
     ).write(output_image_path)
     print(f"Output image saved to {output_image_path}")
 
-    # Present the result and keep the window open
-    while app.process_events():
-        # Keep presenting the result
-        app.present()
-        time.sleep(0.01) 
+    # # Present the result and keep the window open
+    # while app.process_events():
+    #     # Keep presenting the result
+    #     app.present()
+    #     time.sleep(0.01) 
     
 
 class Timer:
@@ -242,7 +263,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Neural Texture Generator")
     parser.add_argument("--mode", choices=["train", "inference"], default="train",
                         help="Whether to train a model or run inference")
-    parser.add_argument("--save_dir", default="checkpoints",
+    parser.add_argument("--save_dir", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints",
                         help="Path to save or load model weights")
     parser.add_argument("--output", default="output.png",
                         help="Path for the output image in inference mode")
@@ -250,8 +271,10 @@ if __name__ == "__main__":
                         help="Resolution of the output image")
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
+    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints",
+                        help="Base path for model weights")
     
-    parser.add_argument("--mipmap_level", type=int, default=0,
+    parser.add_argument("--mipmap_level", type=float, default=0,
                         help="Mipmap level for training")
     
     args = parser.parse_args()
@@ -267,5 +290,5 @@ if __name__ == "__main__":
         save_model_weights(model, save_path)
     else:
         # Run inference
-        inference_main(model_path=save_path, output_image_path=args.output, resolution=args.resolution)
+        inference_main(args.model_path_base, args.mipmap_level, output_image_path=args.output, resolution=args.resolution)
 

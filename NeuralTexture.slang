@@ -4,7 +4,6 @@
 __exported import network.NeuralModules;
 __exported import network.Activations;
 __exported import network.MLP;
-__exported import network.Conv2D;
 __exported import network.Encodings;
 __exported import network.Losses;
 
@@ -51,17 +50,15 @@ float4 evalModel<Model : IModule<float, 2, 3>>(Model model, float2 inputUV)
 float evalModelAndLoss<Model : IModule<float, 2, 3>>(Model model, no_diff float2 input, no_diff float3 target)
 {
     let lossFunc = L2Loss();
-    
     float3 prediction = float3(model.forward(input));
 
     return lossFunc.eval(prediction, target);
 }
 
-void trainTexture<Model : IModule<float, 2, 3>>(Model model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float lossScale)
+void trainTexture<Model : IModule<float, 2, 3>>(Model model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float mipmapLevel, float lossScale)
 {
     float2 inputUV = rng.next2D();
-
-    float4 target = targetTex.SampleLevel(sampler, inputUV, 0.0f);
+    float4 target = targetTex.SampleLevel(sampler, inputUV, float(mipmapLevel));
 
     bwd_diff(evalModelAndLoss)(model, inputUV, target.rgb, lossScale);
 }

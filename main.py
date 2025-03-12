@@ -2,6 +2,8 @@
 # Standard library imports
 import math
 import time
+import os
+import os.path as osp
 from pathlib import Path
 
 # Third-party imports
@@ -20,9 +22,9 @@ from network import (
     SwishAct, TanhAct
 )
 
-
-def training_main(max_epochs=100):
+def training_main(max_epochs=100, mipmap_level=0):
     resolution = 512 # depends on the resolution of the input image
+    
     app = App("Neural Texture", device_type=DeviceType.vulkan, width=resolution, height=resolution)
     device = app.device
     # For headless training, bypass the App class and create the device directly
@@ -75,7 +77,7 @@ def training_main(max_epochs=100):
 
         cmd.open()
         for i in range(num_batches_per_epoch):
-            train.append_to(cmd, model, rng, target_tex, sampler, loss_scale)
+            train.append_to(cmd, model, rng, target_tex, sampler, mipmap_level, loss_scale)
             for params, optim in zip(model.parameters(), optimizers):
                 step.append_to(cmd, optim, params, params.grad_out, learning_rate, grad_scale)
         cmd.close()
@@ -93,8 +95,8 @@ def training_main(max_epochs=100):
               f"Epoch time: {timer.elapsed() * 1e3:.1f}ms")
 
         # Evaluate the model once per epoch, comment below 2 lines for headless training
-        module.evalModel(model, uv_grid, _result=app.output)
-        app.present()
+        # module.evalModel(model, uv_grid, _result=app.output)
+        # app.present()
 
         timer.stop()
 
@@ -102,14 +104,12 @@ def training_main(max_epochs=100):
     device.run_garbage_collection()
     return model
 
-
 def create_uv_grid(device: Device, resolution: int):
     span = np.linspace(0, 1, resolution, dtype=np.float32)
     uvs_np = np.stack(np.broadcast_arrays(span[None, :], span[:, None]), axis=2)
     uvs = NDBuffer(device, 'float2', shape=(resolution, resolution))
     uvs.copy_from_numpy(uvs_np)
     return uvs
-
 
 def save_model_weights(model, filename):
     """Save model weights to a file."""
@@ -130,7 +130,6 @@ def save_model_weights(model, filename):
     np.savez(filename, **weights_dict)
     print(f"Model weights saved to {filename} with {len(linear_layers)} linear layers")
 
-
 def load_model_weights(model, filename):
     """Load model weights from a file."""
     # Load the weights
@@ -147,7 +146,6 @@ def load_model_weights(model, filename):
             layer.biases.storage.copy_from_numpy(weights_dict[f"layer_{i}_biases"])
     
     print(f"Model weights loaded from {filename}")
-
 
 def inference_main(model_path, output_image_path, resolution=512):
     """Run inference with a saved model and save the output as an image."""
@@ -244,7 +242,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Neural Texture Generator")
     parser.add_argument("--mode", choices=["train", "inference"], default="train",
                         help="Whether to train a model or run inference")
-    parser.add_argument("--save_path", default="model_weights.npz",
+    parser.add_argument("--save_dir", default="checkpoints",
                         help="Path to save or load model weights")
     parser.add_argument("--output", default="output.png",
                         help="Path for the output image in inference mode")
@@ -253,15 +251,21 @@ if __name__ == "__main__":
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
     
+    parser.add_argument("--mipmap_level", type=int, default=0,
+                        help="Mipmap level for training")
+    
     args = parser.parse_args()
+    
+    # Save the trained model
+    if not osp.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+    save_path = Path(args.save_dir) / f"model_{args.mipmap_level}.npz"
     
     if args.mode == "train":
         # Run training
-        model = training_main(max_epochs=args.max_epochs)
-        
-        # Save the trained model
-        save_model_weights(model, args.save_path)
+        model = training_main(max_epochs=args.max_epochs, mipmap_level=args.mipmap_level)
+        save_model_weights(model, save_path)
     else:
         # Run inference
-        inference_main(args.save_path, args.output, args.resolution)
+        inference_main(model_path=save_path, output_image_path=args.output, resolution=args.resolution)
 

@@ -57,10 +57,19 @@ def training_main(max_epochs=100, mipmap_level=0):
     rng = module.RNG(seeds)
 
     loader = TextureLoader(device)
-    target_tex = loader.load_texture("inputs/checkerboard.png", {"load_as_normalized": True})
-    sampler = device.create_sampler(min_lod=0, max_lod=0)
+    target_tex = loader.load_texture("inputs/checkerboard.png", {"load_as_normalized": True, "generate_mips": True})
+    sampler = device.create_sampler(min_lod=0, max_lod=7)
     uv_grid = create_uv_grid(device, resolution)
-
+    
+    # module.sampleMip(uv_grid, target_tex, sampler, _result=app.output)
+    # bitmap = app.output.to_bitmap()
+    # bitmap.convert(
+    #     sgl.Bitmap.PixelFormat.rgb,
+    #     sgl.Bitmap.ComponentType.uint8,
+    #     srgb_gamma=True
+    # ).write('../sayan_code/slangpy-ml/outputs/mipsample.png')
+    # print(f"Output image saved to ../sayan_code/slangpy-ml/outputs/mipsample.png")
+    
     epoch_count = 0
     timer = Timer()
     cmd = device.create_command_buffer()
@@ -283,7 +292,7 @@ if __name__ == "__main__":
     # Save the trained model
     if not osp.exists(args.save_dir):
         os.makedirs(args.save_dir)
-    save_path = Path(args.save_dir) / f"model_{args.mipmap_level}.npz"
+    save_path = Path(args.save_dir) / f"model_{int(args.mipmap_level)}.npz"
     
     if args.mode == "train":
         # Run training

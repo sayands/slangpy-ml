@@ -211,8 +211,12 @@ def inference_main(model_path_base, lod, output_image_path, resolution=512):
 
     device.wait()
     
+    timer = Timer()
+    timer.start()
     # Evaluate the model once to generate the texture
     module.evalMipLevel(floor_model, ceil_model, uv_grid, alpha, _result=app.output)
+    timer.stop()
+    print(f"Model evaluation time: {timer.elapsed() * 1e3:.1f}ms")
 
     # Convert the output texture to a bitmap and save it
     bitmap = app.output.to_bitmap()

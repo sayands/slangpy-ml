@@ -20,7 +20,7 @@
 # xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 2
 # xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 3
 # xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 4
-xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 5
+# xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 5
 # xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 6
 # xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 7
 

@@ -57,10 +57,19 @@ def training_main(max_epochs=100, mipmap_level=0):
     rng = module.RNG(seeds)
 
     loader = TextureLoader(device)
-    target_tex = loader.load_texture("bernie.jpg", {"load_as_normalized": True})
-    sampler = device.create_sampler(min_lod=0, max_lod=0)
-    uv_grid = create_uv_grid(device, resolution)
-
+    target_tex = loader.load_texture("inputs/texture.jpg", {"load_as_normalized": True, "generate_mips": True})
+    sampler = device.create_sampler(min_lod=0, max_lod=7)
+    
+    # uv_grid = create_uv_grid(device, resolution)
+    # module.sampleMip(uv_grid, target_tex, sampler, _result=app.output)
+    # bitmap = app.output.to_bitmap()
+    # bitmap.convert(
+    #     sgl.Bitmap.PixelFormat.rgb,
+    #     sgl.Bitmap.ComponentType.uint8,
+    #     srgb_gamma=True
+    # ).write('../sayan_code/slangpy-ml/outputs/mipsample.png')
+    # print(f"Output image saved to ../sayan_code/slangpy-ml/outputs/mipsample.png")
+    
     epoch_count = 0
     timer = Timer()
     cmd = device.create_command_buffer()
@@ -186,11 +195,12 @@ def inference_main(model_path_base, lod, output_image_path, resolution=512):
     floor_mip_level = math.floor(lod)
     floor_model_path = os.path.join(model_path_base, f"model_{floor_mip_level}.npz")
     load_model_weights(floor_model, floor_model_path)
-
+    
+    
     ceil_mip_level = math.ceil(lod)
     ceil_model_path = os.path.join(model_path_base, f"model_{ceil_mip_level}.npz")
     load_model_weights(ceil_model, ceil_model_path)
-
+    
     alpha = lod - floor_mip_level
     
     # Create a UV grid for evaluation, just like in training
@@ -201,8 +211,12 @@ def inference_main(model_path_base, lod, output_image_path, resolution=512):
 
     device.wait()
     
+    timer = Timer()
+    timer.start()
     # Evaluate the model once to generate the texture
     module.evalMipLevel(floor_model, ceil_model, uv_grid, alpha, _result=app.output)
+    timer.stop()
+    print(f"Model evaluation time: {timer.elapsed() * 1e3:.1f}ms")
 
     # Convert the output texture to a bitmap and save it
     bitmap = app.output.to_bitmap()
@@ -271,7 +285,7 @@ if __name__ == "__main__":
                         help="Resolution of the output image")
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
-    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints",
+    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/texture",
                         help="Base path for model weights")
     
     parser.add_argument("--mipmap_level", type=float, default=0,
@@ -282,11 +296,11 @@ if __name__ == "__main__":
     # Save the trained model
     if not osp.exists(args.save_dir):
         os.makedirs(args.save_dir)
-    save_path = Path(args.save_dir) / f"model_{args.mipmap_level}.npz"
+    save_path = Path(args.save_dir) / f"model_{int(args.mipmap_level)}.npz"
     
     if args.mode == "train":
         # Run training
-        model = training_main(max_epochs=args.max_epochs, mipmap_level=args.mipmap_level)
+        model = training_main(max_epochs=args.max_epochs, mipmap_level=int(args.mipmap_level))
         save_model_weights(model, save_path)
     else:
         # Run inference

@@ -15,3 +15,5 @@ dist/
 *.npz
 *.png
 checkpoints/
+inputs/
+outputs/

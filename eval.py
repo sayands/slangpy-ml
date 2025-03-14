@@ -2,7 +2,6 @@ import os.path as osp
 import numpy as np
 from PIL import Image
 from slangpy.backend import DeviceType, TextureLoader
-import lpips
 
 # Local application imports
 from app import App
@@ -11,10 +10,6 @@ def calculate_psnr(groundtruth, pred):
     mse = np.mean((pred - groundtruth) ** 2)
     psnr = 10 * np.log10(1 / mse)
     return psnr
-
-def calculate_lpips(groundtruth, pred):
-    model = lpips.LPIPS(net='vgg').cuda()
-    
 
 if __name__ == '__main__':
     

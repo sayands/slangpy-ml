@@ -72,8 +72,8 @@ float4 evalMipLevel<Model : IModule<float, 2, 3>>(Model model_floor, Model model
     return float4(prediction, 1.0f);
 }
 
-float4 sampleMip(float2 inputUV, Texture2D<float4> targetTex, SamplerState sampler)
+float4 sampleMip(float2 inputUV, Texture2D<float4> targetTex, SamplerState sampler, float mipmapLevel)
 {
-    float4 target = targetTex.SampleLevel(sampler, inputUV, 4.0f);
+    float4 target = targetTex.SampleLevel(sampler, inputUV, mipmapLevel);
     return float4(target.rgb, 1.0f);
 }

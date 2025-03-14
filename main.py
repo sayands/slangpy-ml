@@ -57,10 +57,10 @@ def training_main(max_epochs=100, mipmap_level=0):
     rng = module.RNG(seeds)
 
     loader = TextureLoader(device)
-    target_tex = loader.load_texture("inputs/checkerboard.png", {"load_as_normalized": True, "generate_mips": True})
+    target_tex = loader.load_texture("inputs/texture.jpg", {"load_as_normalized": True, "generate_mips": True})
     sampler = device.create_sampler(min_lod=0, max_lod=7)
-    uv_grid = create_uv_grid(device, resolution)
     
+    # uv_grid = create_uv_grid(device, resolution)
     # module.sampleMip(uv_grid, target_tex, sampler, _result=app.output)
     # bitmap = app.output.to_bitmap()
     # bitmap.convert(
@@ -281,7 +281,7 @@ if __name__ == "__main__":
                         help="Resolution of the output image")
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
-    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/checkerboard",
+    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/texture",
                         help="Base path for model weights")
     
     parser.add_argument("--mipmap_level", type=float, default=0,

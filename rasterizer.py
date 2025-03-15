@@ -150,6 +150,7 @@ video_writer = cv2.VideoWriter("rotated_triangles.mp4", fourcc, fps, (width, hei
 
 # Render and save frames
 print("Rendering and saving video...")
+render_times = []
 for frame in range(num_frames):
     angle = -frame * angle_step
     
@@ -165,8 +166,11 @@ for frame in range(num_frames):
     num_triangles = len(triangles)
     
     # Render the frame
+    time_start = time()
     rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, model, call_id(), _result=app.output)
-    
+    total_time = time() - time_start
+    render_times.append(total_time)
+
     # Extract pixel data
     bitmap = app.output.to_bitmap()
     bitmap_rgb = bitmap.convert(
@@ -188,6 +192,12 @@ for frame in range(num_frames):
 # Release video writer
 video_writer.release()
 print("Video saved to: rotated_triangles.mp4")
+
+# Print render times
+print("\nRender times:")
+print(f"  Min: {np.min(render_times):.3f} s")
+print(f"  Max: {np.max(render_times):.3f} s")
+print(f"  Avg: {np.mean(render_times):.3f} s")
 
 # # Print debug information for final frame
 # print("\nCamera settings:")

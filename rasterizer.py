@@ -119,7 +119,7 @@ model = ModuleChain(
     SigmoidAct(3)
 )
 model.initialize(device)
-load_model_weights(model, '/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/bernie/model_0.npz')
+load_model_weights(model, '/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/checkerboard/model_0.npz')
 
 # Define vertices with UVs
 depth = 0.0

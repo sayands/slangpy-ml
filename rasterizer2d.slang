@@ -56,7 +56,7 @@ struct Camera
     }
 };
 
-float2 worldToScreen(float3 worldPos, Camera camera)
+float2 worldToScreen(float3 worldPos, Camera camera, out float w)
 {
     // Convert to homogeneous coordinates
     float4 pos = float4(worldPos, 1.0);
@@ -67,6 +67,8 @@ float2 worldToScreen(float3 worldPos, Camera camera)
     
     float4 viewPos = mul(view, pos);
     float4 clipPos = mul(proj, viewPos);
+
+    w = clipPos.w;
     
     // Perform perspective divide to get NDC coordinates
     float3 ndcPos = clipPos.xyz / clipPos.w;
@@ -116,6 +118,80 @@ bool isPointInTriangle(float2 p, float2 a, float2 b, float2 c, out float3 baryce
     return (u >= 0) && (v >= 0) && (u + v <= 1);
 }
 
+// Compute perspective-correct UV gradients
+void computeUVGradients(
+    float2 s0, float2 s1, float2 s2,  // Screen-space positions
+    float2 uv0, float2 uv1, float2 uv2,  // UV coordinates
+    float w0, float w1, float w2,  // Clip-space w values
+    int2 pixelCoord,  // Current pixel coordinate
+    Camera camera,  // Camera parameters
+    out float2 du, out float2 dv   // Gradients: du/dx, du/dy, dv/dx, dv/dy
+)
+{
+    // Perspective-correct terms
+    float u0_over_w = uv0.x / w0;
+    float u1_over_w = uv1.x / w1;
+    float u2_over_w = uv2.x / w2;
+    float v0_over_w = uv0.y / w0;
+    float v1_over_w = uv1.y / w1;
+    float v2_over_w = uv2.y / w2;
+    float inv_w0 = 1.0 / w0;
+    float inv_w1 = 1.0 / w1;
+    float inv_w2 = 1.0 / w2;
+
+    // Screen-space differences
+    float dx1 = s1.x - s0.x;
+    float dy1 = s1.y - s0.y;
+    float dx2 = s2.x - s0.x;
+    float dy2 = s2.y - s0.y;
+
+    float du1_over_w = u1_over_w - u0_over_w;
+    float du2_over_w = u2_over_w - u0_over_w;
+    float dv1_over_w = v1_over_w - v0_over_w;
+    float dv2_over_w = v2_over_w - v0_over_w;
+    float dinv_w1 = inv_w1 - inv_w0;
+    float dinv_w2 = inv_w2 - inv_w0;
+
+    float det = dx1 * dy2 - dx2 * dy1;
+    if (abs(det) < 1e-6) {
+        du = float2(0.0, 0.0);
+        dv = float2(0.0, 0.0);
+        return;
+    }
+
+    float invDet = 1.0 / det;
+
+    // Gradients of u/w, v/w, 1/w in screen space
+    float du_over_w_dx = (du1_over_w * dy2 - du2_over_w * dy1) * invDet;
+    float du_over_w_dy = (dx1 * du2_over_w - dx2 * du1_over_w) * invDet;
+    float dv_over_w_dx = (dv1_over_w * dy2 - dv2_over_w * dy1) * invDet;
+    float dv_over_w_dy = (dx1 * dv2_over_w - dx2 * dv1_over_w) * invDet;
+    float dinv_w_dx = (dinv_w1 * dy2 - dinv_w2 * dy1) * invDet;
+    float dinv_w_dy = (dx1 * dinv_w2 - dx2 * dinv_w1) * invDet;
+
+    // Perspective-correct gradients using the chain rule
+    // u = (u/w) / (1/w), so du/dx = (d(u/w)/dx * (1/w) - (u/w) * d(1/w)/dx) / (1/w)^2
+    // For simplicity, compute at the current pixel's interpolated 1/w
+    float3 barycentric;
+    float2 point = pixelCoord;  // Use current pixel for approximation
+    point.y = camera.frameDim.y - point.y;
+    if (!isPointInTriangle(point, s0, s1, s2, barycentric))
+    {
+        du = float2(0.0, 0.0);
+        dv = float2(0.0, 0.0);
+        return;
+    }
+    float inv_w = inv_w0 * barycentric.x + inv_w1 * barycentric.y + inv_w2 * barycentric.z;
+    float u_over_w = u0_over_w * barycentric.x + u1_over_w * barycentric.y + u2_over_w * barycentric.z;
+    float v_over_w = v0_over_w * barycentric.x + v1_over_w * barycentric.y + v2_over_w * barycentric.z;
+    float w = 1.0 / inv_w;
+
+    du.x = (du_over_w_dx * inv_w - u_over_w * dinv_w_dx) * w;
+    du.y = (du_over_w_dy * inv_w - u_over_w * dinv_w_dy) * w;
+    dv.x = (dv_over_w_dx * inv_w - v_over_w * dinv_w_dx) * w;
+    dv.y = (dv_over_w_dy * inv_w - v_over_w * dinv_w_dy) * w;
+}
+
 // Rasterize function called from Python
 float4 rasterize<Model : IModule<float, 2, 3>>(Camera camera, float3 vertices[][3], float2 uvs[][3], int numTriangles, Texture2D<float4> texture, SamplerState sampler, Model model, int2 pixelCoord)
 {
@@ -136,19 +212,56 @@ float4 rasterize<Model : IModule<float, 2, 3>>(Camera camera, float3 vertices[][
         float2 uv0 = uvs[i][0];
         float2 uv1 = uvs[i][1];
         float2 uv2 = uvs[i][2];
+
+        float w0, w1, w2;
         
         // Convert world space vertices to screen space
-        float2 s0 = worldToScreen(v0, camera);
-        float2 s1 = worldToScreen(v1, camera);
-        float2 s2 = worldToScreen(v2, camera);
+        float2 s0 = worldToScreen(v0, camera, w0);
+        float2 s1 = worldToScreen(v1, camera, w1);
+        float2 s2 = worldToScreen(v2, camera, w2);
 
         
         // Check if current pixel is inside the triangle
         float3 barycentric;
         if (isPointInTriangle(point, s0, s1, s2, barycentric)) {
             // Color the first triangle red, the second triangle blue
-            float2 uv = uv0 * barycentric.x + uv1 * barycentric.y + uv2 * barycentric.z;
-            outColor = evalNeuralTexture(model, uv);
+            // Perspective-correct UV interpolation
+            float u0_over_w = uv0.x / w0;
+            float u1_over_w = uv1.x / w1;
+            float u2_over_w = uv2.x / w2;
+            float v0_over_w = uv0.y / w0;
+            float v1_over_w = uv1.y / w1;
+            float v2_over_w = uv2.y / w2;
+            float inv_w0 = 1.0 / w0;
+            float inv_w1 = 1.0 / w1;
+            float inv_w2 = 1.0 / w2;
+
+            float u_over_w = u0_over_w * barycentric.x + u1_over_w * barycentric.y + u2_over_w * barycentric.z;
+            float v_over_w = v0_over_w * barycentric.x + v1_over_w * barycentric.y + v2_over_w * barycentric.z;
+            float inv_w = inv_w0 * barycentric.x + inv_w1 * barycentric.y + inv_w2 * barycentric.z;
+            float2 uv = float2(u_over_w, v_over_w) / inv_w;
+
+            // Compute perspective-correct gradients
+            float2 du, dv;
+            computeUVGradients(s0, s1, s2, uv0, uv1, uv2, w0, w1, w2, pixelCoord, camera, du, dv);
+            
+            // Compute LOD correctly
+            int2 texSize = int2(512, 512);
+            float2 texSizeF = float2(texSize);
+            
+            // Texture-space gradients per screen pixel
+            float2 dUV_dx = float2(du.x * texSizeF.x, dv.x * texSizeF.y);  // Change in (u,v) per x-pixel
+            float2 dUV_dy = float2(du.y * texSizeF.x, dv.y * texSizeF.y);  // Change in (u,v) per y-pixel
+            
+            // Length of texture-space gradient in each screen direction
+            float len_dx = length(dUV_dx);
+            float len_dy = length(dUV_dy);
+            
+            // LOD is log2 of the maximum sampling rate
+            float lod = log2(max(len_dx, len_dy));
+            lod = clamp(lod, 0.0, float(9 - 1));
+            outColor = texture.SampleLevel(sampler, uv, lod);
+            // outColor = evalNeuralTexture(model, uv);
             break;
         }
     }

@@ -6,6 +6,7 @@ import sgl
 import numpy as np
 import cv2
 from slangpy.types import call_id
+from slangpy.backend import DeviceType, TextureLoader
 
 # Function to normalize a vector
 def normalize(v):
@@ -69,22 +70,34 @@ class Camera:
             "_type": "Camera"
         }
 
-# Initialize app and load shader
-app = App()
+app = App("Neural Texture", device_type=DeviceType.vulkan, width=1024, height=1024)
+device = app.device
 rasterizer2d = spy.Module.load_from_file(app.device, "rasterizer2d.slang")
 
 # Set up camera
 camera = Camera(app)
 
-# Base vertices for triangles
+# Load texture
+loader = TextureLoader(device)
+texture = loader.load_texture("/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/bernie.jpg", {"load_as_normalized": True, "generate_mips": True})
+sampler = device.create_sampler(min_lod=0, max_lod=7)
+
+# Define vertices with UVs
 depth = 0.0
 base_v0 = sgl.float3(-0.5, 0.5, depth)  # Top-left
 base_v1 = sgl.float3(0.5, 0.5, depth)   # Top-right
 base_v2 = sgl.float3(0.5, -0.5, depth)  # Bottom-right
 base_v3 = sgl.float3(-0.5, -0.5, depth) # Bottom-left
 
-base_triangle1 = [base_v0, base_v1, base_v2]
-base_triangle2 = [base_v0, base_v2, base_v3]
+uv0 = sgl.float2(0.0, 0.0)
+uv1 = sgl.float2(1.0, 0.0)
+uv2 = sgl.float2(1.0, 1.0)
+uv3 = sgl.float2(0.0, 1.0)
+
+uv_triangles = [
+    [uv0, uv1, uv2],
+    [uv0, uv2, uv3]
+]
 
 # Animation parameters
 num_frames = 60  # Number of frames for 0° to 90° rotation
@@ -113,7 +126,7 @@ for frame in range(num_frames):
     num_triangles = len(triangles)
     
     # Render the frame
-    rasterizer2d.rasterize(camera.get_this(), triangles, num_triangles, call_id(), _result=app.output)
+    rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, call_id(), _result=app.output)
     
     # Extract pixel data
     bitmap = app.output.to_bitmap()

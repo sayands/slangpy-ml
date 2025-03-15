@@ -82,7 +82,7 @@ float2 worldToScreen(float3 worldPos, Camera camera)
 }
 
 // Simple point-in-triangle test using barycentric coordinates
-bool isPointInTriangle(float2 p, float2 a, float2 b, float2 c)
+bool isPointInTriangle(float2 p, float2 a, float2 b, float2 c, out float3 barycentric)
 {
     // Compute vectors
     float2 v0 = c - a;
@@ -100,13 +100,16 @@ bool isPointInTriangle(float2 p, float2 a, float2 b, float2 c)
     float invDenom = 1.0 / (dot00 * dot11 - dot01 * dot01);
     float u = (dot11 * dot02 - dot01 * dot12) * invDenom;
     float v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+    float w = 1.0 - u - v;
+    
+    barycentric = float3(w, u, v);
     
     // Check if point is in triangle
     return (u >= 0) && (v >= 0) && (u + v <= 1);
 }
 
 // Rasterize function called from Python
-float4 rasterize(Camera camera, float3 vertices[][3], int numTriangles, int2 pixelCoord)
+float4 rasterize(Camera camera, float3 vertices[][3], float2 uvs[][3], int numTriangles, Texture2D<float4> texture, SamplerState sampler, int2 pixelCoord)
 {
     // Convert pixel coordinate to screen space
     float2 point = float2(pixelCoord.x, pixelCoord.y);
@@ -121,6 +124,10 @@ float4 rasterize(Camera camera, float3 vertices[][3], int numTriangles, int2 pix
         float3 v0 = vertices[i][0];
         float3 v1 = vertices[i][1];
         float3 v2 = vertices[i][2];
+
+        float2 uv0 = uvs[i][0];
+        float2 uv1 = uvs[i][1];
+        float2 uv2 = uvs[i][2];
         
         // Convert world space vertices to screen space
         float2 s0 = worldToScreen(v0, camera);
@@ -129,13 +136,11 @@ float4 rasterize(Camera camera, float3 vertices[][3], int numTriangles, int2 pix
 
         
         // Check if current pixel is inside the triangle
-        if (isPointInTriangle(point, s0, s1, s2)) {
+        float3 barycentric;
+        if (isPointInTriangle(point, s0, s1, s2, barycentric)) {
             // Color the first triangle red, the second triangle blue
-            if (i == 0) {
-                outColor = float4(1.0, 0.0, 0.0, 1.0);  // Red
-            } else {
-                outColor = float4(0.0, 0.0, 1.0, 1.0);  // Blue
-            }
+            float2 uv = uv0 * barycentric.x + uv1 * barycentric.y + uv2 * barycentric.z;
+            outColor = texture.Sample(sampler, uv);
             break;
         }
     }

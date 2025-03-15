@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import "slangpy";
+__exported import network.NeuralModules;
+// __exported import network.Activations;
+// __exported import network.MLP;
+// __exported import network.Encodings;
+// __exported import network.Losses;
+
+// Has to be an include rather than an import right now
+// Otherwise, __init is not exposed to reflection
+// #include "network/Optimizer.slang"
 
 struct Camera
 {
@@ -103,8 +112,8 @@ bool isPointInTriangle(float2 p, float2 a, float2 b, float2 c, out float3 baryce
     float w = 1.0 - u - v;
     
     barycentric = float3(w, u, v);
-    
-    // Check if point is in triangle
+
+     // Check if point is in triangle
     return (u >= 0) && (v >= 0) && (u + v <= 1);
 }
 
@@ -146,4 +155,10 @@ float4 rasterize(Camera camera, float3 vertices[][3], float2 uvs[][3], int numTr
     }
     
     return outColor;
+}
+
+float4 evalNeuralTexture<Model : IModule<float, 2, 3>>(Model model, float2 inputUV)
+{
+    let prediction = model.forward(inputUV);
+    return float4(prediction, 1.0f);
 }

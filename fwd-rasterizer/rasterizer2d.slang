@@ -48,16 +48,6 @@ struct Camera
     }
 };
 
-// Optional: Define getWorldToScreenMatrix as a standalone function if needed
-float4x4 getWorldToScreenMatrix(Camera camera)
-{
-    float4x4 view = camera.getViewMatrix();
-    float4x4 proj = camera.getPerspectiveMatrix();
-    float4x4 projView = mul(proj, view);
-    return projView;
-}
-
-// Debug helper function to transform a world space point to screen space
 float2 worldToScreen(float3 worldPos, Camera camera)
 {
     // Convert to homogeneous coordinates

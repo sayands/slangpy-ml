@@ -64,13 +64,13 @@ float2 worldToScreen(float3 worldPos, Camera camera)
     float3 ndcPos = clipPos.xyz / clipPos.w;
 
     // Check NDC bounds for clipping
-    // if (ndcPos.x < -1.0 || ndcPos.x > 1.0 || 
-    //     ndcPos.y < -1.0 || ndcPos.y > 1.0 || 
-    //     ndcPos.z < -1.0 || ndcPos.z > 1.0)
-    // {
-    //     // Point is outside the view frustum, return invalid position
-    //     return float2(-1.0, -1.0);
-    // }
+    if (ndcPos.x < -1.0 || ndcPos.x > 1.0 || 
+        ndcPos.y < -1.0 || ndcPos.y > 1.0 || 
+        ndcPos.z < -1.0 || ndcPos.z > 1.0)
+    {
+        // Point is outside the view frustum, return invalid position
+        return float2(-1.0, -1.0);
+    }
     
     // Convert NDC coordinates to screen coordinates
     float2 screenPos = float2(

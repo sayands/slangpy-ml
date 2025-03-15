@@ -2,10 +2,9 @@
 
 import "slangpy";
 __exported import network.NeuralModules;
-// __exported import network.Activations;
-// __exported import network.MLP;
-// __exported import network.Encodings;
-// __exported import network.Losses;
+__exported import network.Activations;
+__exported import network.MLP;
+__exported import network.Encodings;
 
 // Has to be an include rather than an import right now
 // Otherwise, __init is not exposed to reflection
@@ -118,7 +117,7 @@ bool isPointInTriangle(float2 p, float2 a, float2 b, float2 c, out float3 baryce
 }
 
 // Rasterize function called from Python
-float4 rasterize(Camera camera, float3 vertices[][3], float2 uvs[][3], int numTriangles, Texture2D<float4> texture, SamplerState sampler, int2 pixelCoord)
+float4 rasterize<Model : IModule<float, 2, 3>>(Camera camera, float3 vertices[][3], float2 uvs[][3], int numTriangles, Texture2D<float4> texture, SamplerState sampler, Model model, int2 pixelCoord)
 {
     // Convert pixel coordinate to screen space
     float2 point = float2(pixelCoord.x, pixelCoord.y);
@@ -149,7 +148,7 @@ float4 rasterize(Camera camera, float3 vertices[][3], float2 uvs[][3], int numTr
         if (isPointInTriangle(point, s0, s1, s2, barycentric)) {
             // Color the first triangle red, the second triangle blue
             float2 uv = uv0 * barycentric.x + uv1 * barycentric.y + uv2 * barycentric.z;
-            outColor = texture.Sample(sampler, uv);
+            outColor = evalNeuralTexture(model, uv);
             break;
         }
     }

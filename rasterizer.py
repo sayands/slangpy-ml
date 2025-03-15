@@ -8,6 +8,30 @@ import cv2
 from slangpy.types import call_id
 from slangpy.backend import DeviceType, TextureLoader
 
+from network import (
+    Activation, ELUAct, ExpAct, FrequencyEncoding, LeakyReLUAct, 
+    LinearLayer, ModuleChain, NoneAct, ReLUAct, SigmoidAct, 
+    SwishAct, TanhAct
+)
+
+
+def load_model_weights(model, filename):
+    """Load model weights from a file."""
+    # Load the weights
+    weights_dict = np.load(filename)
+    
+    # Find all LinearLayers in the model
+    linear_layers = [m for m in model.modules() if isinstance(m, LinearLayer)]
+    
+    # Assign weights to each layer
+    for i, layer in enumerate(linear_layers):
+        if f"layer_{i}_weights" in weights_dict and f"layer_{i}_biases" in weights_dict:
+            # Copy weights and biases to the device
+            layer.weights.storage.copy_from_numpy(weights_dict[f"layer_{i}_weights"])
+            layer.biases.storage.copy_from_numpy(weights_dict[f"layer_{i}_biases"])
+    
+    print(f"Model weights loaded from {filename}")
+
 # Function to normalize a vector
 def normalize(v):
     """Normalize a vector to have a magnitude of 1."""
@@ -82,6 +106,21 @@ loader = TextureLoader(device)
 texture = loader.load_texture("/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/bernie.jpg", {"load_as_normalized": True, "generate_mips": True})
 sampler = device.create_sampler(min_lod=0, max_lod=7)
 
+# Load Neural Texture
+model = ModuleChain(
+    FrequencyEncoding(2, 5),
+    LinearLayer(20, 64),
+    LeakyReLUAct(64),
+    LinearLayer(64, 64),
+    LeakyReLUAct(64),
+    LinearLayer(64, 64),
+    LeakyReLUAct(64),
+    LinearLayer(64, 3),
+    SigmoidAct(3)
+)
+model.initialize(device)
+load_model_weights(model, '/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/bernie/model_0.npz')
+
 # Define vertices with UVs
 depth = 0.0
 base_v0 = sgl.float3(-0.5, 0.5, depth)  # Top-left
@@ -126,7 +165,7 @@ for frame in range(num_frames):
     num_triangles = len(triangles)
     
     # Render the frame
-    rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, call_id(), _result=app.output)
+    rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, model, call_id(), _result=app.output)
     
     # Extract pixel data
     bitmap = app.output.to_bitmap()

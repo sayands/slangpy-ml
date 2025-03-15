@@ -123,15 +123,15 @@ load_model_weights(model, '/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints
 
 # Define vertices with UVs
 depth = 0.0
-base_v0 = sgl.float3(-0.5, 0.5, depth)  # Top-left
-base_v1 = sgl.float3(0.5, 0.5, depth)   # Top-right
-base_v2 = sgl.float3(0.5, -0.5, depth)  # Bottom-right
-base_v3 = sgl.float3(-0.5, -0.5, depth) # Bottom-left
+base_v0 = sgl.float3(-0.5, -0.5, depth) # Bottom-left
+base_v1 = sgl.float3(-0.5, 0.5, depth)  # Top-left
+base_v2 = sgl.float3(0.5, 0.5, depth)   # Top-right
+base_v3 = sgl.float3(0.5, -0.5, depth)  # Bottom-right
 
-uv0 = sgl.float2(0.0, 0.0)
-uv1 = sgl.float2(1.0, 0.0)
-uv2 = sgl.float2(1.0, 1.0)
-uv3 = sgl.float2(0.0, 1.0)
+uv0 = sgl.float2(0.0, 0.0) # Bottom-left
+uv1 = sgl.float2(0.0, 1.0) # Top-left
+uv2 = sgl.float2(1.0, 1.0) # Top-right
+uv3 = sgl.float2(1.0, 0.0) # Bottom-right
 
 uv_triangles = [
     [uv0, uv1, uv2],

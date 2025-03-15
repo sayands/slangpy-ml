@@ -103,7 +103,7 @@ camera = Camera(app)
 
 # Load texture
 loader = TextureLoader(device)
-texture = loader.load_texture("/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/bernie.jpg", {"load_as_normalized": True, "generate_mips": True})
+texture = loader.load_texture("/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/checkerboard.png", {"load_as_normalized": True, "generate_mips": True})
 sampler = device.create_sampler(min_lod=0, max_lod=7)
 
 # Load Neural Texture

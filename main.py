@@ -22,6 +22,8 @@ from network import (
     SwishAct, TanhAct
 )
 
+from utils import model_util, timer, uv_util
+
 def training_main(max_epochs=100, mipmap_level=0):
     resolution = 512 # depends on the resolution of the input image
     
@@ -60,18 +62,9 @@ def training_main(max_epochs=100, mipmap_level=0):
     target_tex = loader.load_texture("inputs/texture.jpg", {"load_as_normalized": True, "generate_mips": True})
     sampler = device.create_sampler(min_lod=0, max_lod=7)
     
-    # uv_grid = create_uv_grid(device, resolution)
-    # module.sampleMip(uv_grid, target_tex, sampler, _result=app.output)
-    # bitmap = app.output.to_bitmap()
-    # bitmap.convert(
-    #     sgl.Bitmap.PixelFormat.rgb,
-    #     sgl.Bitmap.ComponentType.uint8,
-    #     srgb_gamma=True
-    # ).write('../sayan_code/slangpy-ml/outputs/mipsample.png')
-    # print(f"Output image saved to ../sayan_code/slangpy-ml/outputs/mipsample.png")
-    
+
     epoch_count = 0
-    timer = Timer()
+    timer = timer.Timer()
     cmd = device.create_command_buffer()
 
     while app.process_events(): # Change to while True for headless training
@@ -113,49 +106,6 @@ def training_main(max_epochs=100, mipmap_level=0):
     device.run_garbage_collection()
     return model
 
-def create_uv_grid(device: Device, resolution: int):
-    span = np.linspace(0, 1, resolution, dtype=np.float32)
-    uvs_np = np.stack(np.broadcast_arrays(span[None, :], span[:, None]), axis=2)
-    uvs = NDBuffer(device, 'float2', shape=(resolution, resolution))
-    uvs.copy_from_numpy(uvs_np)
-    return uvs
-
-def save_model_weights(model, filename):
-    """Save model weights to a file."""
-    weights_dict = {}
-    
-    # Filter for LinearLayers first
-    linear_layers = [m for m in model.modules() if isinstance(m, LinearLayer)]
-    
-    # Save each LinearLayer's weights
-    for i, layer in enumerate(linear_layers):
-        if layer.weights is not None and layer.biases is not None:
-            weights = layer.weights.storage.to_numpy()
-            biases = layer.biases.storage.to_numpy()
-            weights_dict[f"layer_{i}_weights"] = weights
-            weights_dict[f"layer_{i}_biases"] = biases
-    
-    # Save to file
-    np.savez(filename, **weights_dict)
-    print(f"Model weights saved to {filename} with {len(linear_layers)} linear layers")
-
-def load_model_weights(model, filename):
-    """Load model weights from a file."""
-    # Load the weights
-    weights_dict = np.load(filename)
-    
-    # Find all LinearLayers in the model
-    linear_layers = [m for m in model.modules() if isinstance(m, LinearLayer)]
-    
-    # Assign weights to each layer
-    for i, layer in enumerate(linear_layers):
-        if f"layer_{i}_weights" in weights_dict and f"layer_{i}_biases" in weights_dict:
-            # Copy weights and biases to the device
-            layer.weights.storage.copy_from_numpy(weights_dict[f"layer_{i}_weights"])
-            layer.biases.storage.copy_from_numpy(weights_dict[f"layer_{i}_biases"])
-    
-    print(f"Model weights loaded from {filename}")
-
 def inference_main(model_path_base, lod, output_image_path, resolution=512):
     """Run inference with a saved model and save the output as an image."""
     # Create app with window, just like in training
@@ -194,24 +144,24 @@ def inference_main(model_path_base, lod, output_image_path, resolution=512):
     # Load the saved weights
     floor_mip_level = math.floor(lod)
     floor_model_path = os.path.join(model_path_base, f"model_{floor_mip_level}.npz")
-    load_model_weights(floor_model, floor_model_path)
+    model_util.load_model_weights(floor_model, floor_model_path)
     
     
     ceil_mip_level = math.ceil(lod)
     ceil_model_path = os.path.join(model_path_base, f"model_{ceil_mip_level}.npz")
-    load_model_weights(ceil_model, ceil_model_path)
+    model_util.load_model_weights(ceil_model, ceil_model_path)
     
     alpha = lod - floor_mip_level
     
     # Create a UV grid for evaluation, just like in training
-    uv_grid = create_uv_grid(device, resolution)
+    uv_grid = uv_util.create_uv_grid(device, resolution)
     
     # Load the module for evaluation
     module = Module.load_from_file(device, "NeuralTexture.slang")
 
     device.wait()
     
-    timer = Timer()
+    timer = timer.Timer()
     timer.start()
     # Evaluate the model once to generate the texture
     module.evalMipLevel(floor_model, ceil_model, uv_grid, alpha, _result=app.output)
@@ -233,39 +183,6 @@ def inference_main(model_path_base, lod, output_image_path, resolution=512):
     #     app.present()
     #     time.sleep(0.01) 
     
-
-class Timer:
-    def __init__(self, history: int = 16):
-        super().__init__()
-        self.index = 0
-        self.begin = None
-        self.times = [0.0] * history
-        self.history = history
-
-    def start(self):
-        self.begin = time.time()
-
-    def stop(self):
-        if self.begin is None:
-            return
-
-        t = time.time()
-        elapsed = t - self.begin
-        self.begin = t
-
-        self.times[self.index % self.history] = elapsed
-        self.index += 1
-
-        return self.elapsed()
-
-    def elapsed(self):
-        l = min(self.index, self.history)
-        return 0 if l == 0 else sum(self.times[:l]) / l
-
-    def frequency(self):
-        e = self.elapsed()
-        return 0 if e == 0 else 1.0 / e
-
 """
 Scripts for training and inference with the neural texture generator.
 python main.py --mode train --max_epochs 100 --save_path my_model.npz
@@ -301,7 +218,7 @@ if __name__ == "__main__":
     if args.mode == "train":
         # Run training
         model = training_main(max_epochs=args.max_epochs, mipmap_level=int(args.mipmap_level))
-        save_model_weights(model, save_path)
+        model_util.save_model_weights(model, save_path)
     else:
         # Run inference
         inference_main(args.model_path_base, args.mipmap_level, output_image_path=args.output, resolution=args.resolution)

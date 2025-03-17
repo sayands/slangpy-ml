@@ -87,12 +87,14 @@ def make_plot(data_nn, data_gt, resolutions, plot_name, texture_name):
 
     # Adding labels and title
     plt.xlabel('Resolution', fontsize=14)
-    plt.ylabel('Time (ms)', fontsize=14)
     
     if 'timing' in plot_name:
-        plt.title(f'Inference Time: Neural Network vs Ground Truth (on {texture_name})', fontsize=16)
+        plt.ylabel('Time (ms)', fontsize=14)
+        plt.title(f'Inference Time: Neural Network vs Ground Truth', fontsize=16)
     elif 'memory' in plot_name:
-        plt.title(f'Memory: Neural Network vs Ground Truth (on {texture_name})', fontsize=16)
+        plt.ylabel('Memory (MB)', fontsize=14)
+        plt.title(f'Memory: Neural Network vs Ground Truth', fontsize=16)
+    
     else:
         raise NotImplementedError
 

@@ -49,7 +49,8 @@ float4 evalModel<Model : IModule<float, 2, 3>>(Model model, float2 inputUV)
 float4 residualEvalModel<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, float2 inputUV)
 {
     float3 color = prev_model.forward(inputUV);
-    float3 prediction = color + float3(model.forward(inputUV, color));
+    vector<float, 5> input_res = { inputUV[0], inputUV[1], color[0], color[1], color[2] };
+    float3 prediction = color + float3(model.forward(input_res));
 
     return float4(prediction, 1.0f);
 }
@@ -63,23 +64,6 @@ float evalModelAndLoss<Model : IModule<float, 2, 3>>(Model model, no_diff float2
     return lossFunc.eval(prediction, target);
 }
 
-[BackwardDifferentiable]
-float residualEvalModelAndLoss<Model : IModule<float, 5, 3>, PrevModel : IModule<float, 2, 3>>(Model model, no_diff PrevModel prev_model, no_diff float2 input, no_diff float3 target)
-{
-    let lossFunc = L2Loss();
-    float3 color = prev_model.forward(input);
-    Buffer<float> input_buffer = Buffer<float>(5.);
-    input_buffer[0] = input.x;
-    input_buffer[1] = input.y;
-    input_buffer[2] = color.x;
-    input_buffer[3] = color.y;
-    input_buffer[4] = color.z;
-    float3 prediction = color + float3(model.forward(input_buffer));
-
-    return lossFunc.eval(prediction, target);
-}
-
-
 void trainTexture<Model : IModule<float, 2, 3>>(Model model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float mipmapLevel, float lossScale)
 {
     float2 inputUV = rng.next2D();
@@ -89,16 +73,17 @@ void trainTexture<Model : IModule<float, 2, 3>>(Model model, inout RNG rng, Text
 }
 
 [BackwardDifferentiable]
-float residualEvalModelAndLoss<Model : IModule<float, 5, 3>, PrevModel : IModule<float, 2, 3>>(Model model, no_diff PrevModel prev_model, no_diff float2 input, no_diff float3 target)
+float residualEvalModelAndLoss<Model : IModule<float, 5, 3>, PrevModel : IModule<float, 2, 3>>(Model model, no_diff PrevModel prev_model, no_diff float2 inputUV, no_diff float3 target)
 {
     let lossFunc = L2Loss();
-    float3 model_input = prev_model.forward(input);
-    float3 prediction = model_input + float3(prev_model.forward(float5(input.x, input.y, model_input.x, model_input.y, model_input.z)));
+    float3 model_input = prev_model.forward(inputUV);
+    vector<float, 5> input_res = { inputUV[0], inputUV[1], model_input[0], model_input[1], model_input[2] };
+    float3 prediction = model_input + float3(model.forward(input_res));
 
     return lossFunc.eval(prediction, target);
 }
 
-void residualTrainTexture<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float mipmapLevel, float lossScale)
+void residualTrainTexture<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float lossScale)
 {
     float2 inputUV = rng.next2D();
     float4 target = targetTex.SampleLevel(sampler, inputUV, 0.0);

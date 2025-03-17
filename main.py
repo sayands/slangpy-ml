@@ -285,7 +285,7 @@ if __name__ == "__main__":
                         help="Resolution of the output image")
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
-    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/texture",
+    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth",
                         help="Base path for model weights")
     
     parser.add_argument("--mipmap_level", type=float, default=0,

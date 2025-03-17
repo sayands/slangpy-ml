@@ -246,7 +246,7 @@ float4 rasterize<Model : IModule<float, 2, 3>>(Camera camera, float3 vertices[][
             computeUVGradients(s0, s1, s2, uv0, uv1, uv2, w0, w1, w2, pixelCoord, camera, du, dv);
             
             // Compute LOD correctly
-            int2 texSize = int2(512, 512);
+            int2 texSize = int2(256, 256);
             float2 texSizeF = float2(texSize);
             
             // Texture-space gradients per screen pixel
@@ -259,9 +259,16 @@ float4 rasterize<Model : IModule<float, 2, 3>>(Camera camera, float3 vertices[][
             
             // LOD is log2 of the maximum sampling rate
             float lod = log2(max(len_dx, len_dy));
-            lod = clamp(lod, 0.0, float(9 - 1));
-            outColor = texture.SampleLevel(sampler, uv, lod);
-            // outColor = evalNeuralTexture(model, uv);
+            lod = clamp(lod, 0.0, float(8 - 1));
+            int floor_lod = int(floor(lod));
+            int ceil_lod = int(ceil(lod));
+            float alpha = lod - floor_lod;
+
+            // outColor = evalMipLevel(models[floor_lod], models[ceil_lod], uv, alpha);
+            // outColor = texture.SampleLevel(sampler, uv, lod);
+            outColor = evalNeuralTexture(model, uv);
+            // Debug: Visualize gradients (optional)
+            // outColor = float4(lod / 7.0, 0.0, 0.0, 1.0);
             break;
         }
     }
@@ -272,5 +279,15 @@ float4 rasterize<Model : IModule<float, 2, 3>>(Camera camera, float3 vertices[][
 float4 evalNeuralTexture<Model : IModule<float, 2, 3>>(Model model, float2 inputUV)
 {
     let prediction = model.forward(inputUV);
+    return float4(prediction, 1.0f);
+}
+
+
+float4 evalMipLevel<Model : IModule<float, 2, 3>>(Model model_floor, Model model_ceil, float2 inputUV, float alpha)
+{
+    let prediction_floor = model_floor.forward(inputUV);
+    let prediction_ceil = model_ceil.forward(inputUV);
+
+    let prediction = lerp(prediction_floor, prediction_ceil, alpha);
     return float4(prediction, 1.0f);
 }

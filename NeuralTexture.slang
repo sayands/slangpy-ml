@@ -46,6 +46,14 @@ float4 evalModel<Model : IModule<float, 2, 3>>(Model model, float2 inputUV)
     return float4(prediction, 1.0f);
 }
 
+float4 residualEvalModel<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, float2 inputUV)
+{
+    float3 color = prev_model.forward(inputUV);
+    float3 prediction = color + float3(model.forward(inputUV, color));
+
+    return float4(prediction, 1.0f);
+}
+
 [BackwardDifferentiable]
 float evalModelAndLoss<Model : IModule<float, 2, 3>>(Model model, no_diff float2 input, no_diff float3 target)
 {
@@ -55,12 +63,47 @@ float evalModelAndLoss<Model : IModule<float, 2, 3>>(Model model, no_diff float2
     return lossFunc.eval(prediction, target);
 }
 
+[BackwardDifferentiable]
+float residualEvalModelAndLoss<Model : IModule<float, 5, 3>, PrevModel : IModule<float, 2, 3>>(Model model, no_diff PrevModel prev_model, no_diff float2 input, no_diff float3 target)
+{
+    let lossFunc = L2Loss();
+    float3 color = prev_model.forward(input);
+    Buffer<float> input_buffer = Buffer<float>(5.);
+    input_buffer[0] = input.x;
+    input_buffer[1] = input.y;
+    input_buffer[2] = color.x;
+    input_buffer[3] = color.y;
+    input_buffer[4] = color.z;
+    float3 prediction = color + float3(model.forward(input_buffer));
+
+    return lossFunc.eval(prediction, target);
+}
+
+
 void trainTexture<Model : IModule<float, 2, 3>>(Model model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float mipmapLevel, float lossScale)
 {
     float2 inputUV = rng.next2D();
     float4 target = targetTex.SampleLevel(sampler, inputUV, float(mipmapLevel));
 
     bwd_diff(evalModelAndLoss)(model, inputUV, target.rgb, lossScale);
+}
+
+[BackwardDifferentiable]
+float residualEvalModelAndLoss<Model : IModule<float, 5, 3>, PrevModel : IModule<float, 2, 3>>(Model model, no_diff PrevModel prev_model, no_diff float2 input, no_diff float3 target)
+{
+    let lossFunc = L2Loss();
+    float3 model_input = prev_model.forward(input);
+    float3 prediction = model_input + float3(prev_model.forward(float5(input.x, input.y, model_input.x, model_input.y, model_input.z)));
+
+    return lossFunc.eval(prediction, target);
+}
+
+void residualTrainTexture<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float mipmapLevel, float lossScale)
+{
+    float2 inputUV = rng.next2D();
+    float4 target = targetTex.SampleLevel(sampler, inputUV, 0.0);
+
+    bwd_diff(residualEvalModelAndLoss)(model, prev_model, inputUV, target.rgb, lossScale);
 }
 
 float4 evalMipLevel<Model : IModule<float, 2, 3>>(Model model_floor, Model model_ceil, float2 inputUV, float alpha)
@@ -76,4 +119,42 @@ float4 sampleMip(float2 inputUV, Texture2D<float4> targetTex, SamplerState sampl
 {
     float4 target = targetTex.SampleLevel(sampler, inputUV, mipmapLevel);
     return float4(target.rgb, 1.0f);
+}
+
+
+float4 renderSphere<Model : IModule<float, 2, 3>>(Model model, float2 uv_grid, float zoom_factor, int2 coord) {
+    // Check bounds
+    // if (coord.x >= width) return float4(0, 0, 0, 1); // Out of bounds, return black
+
+    // Get base UV from the grid (normalized [0, 1])
+    float2 base_uv = uv_grid;
+
+    // Apply zoom: scale UVs around center (0.5, 0.5)
+    float2 center = float2(0.5, 0.5);
+    float2 uv = center + (base_uv - center) / zoom_factor;
+
+    // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
+    uv = clamp(uv, float2(0.0, 0.0), float2(1.0, 1.0));
+
+    // Evaluate neural model and return color
+    return evalModel(model, uv);
+}
+
+
+float4 renderTex(float2 uv_grid, float rotation_angle, float zoom_factor,  Texture2D<float4> targetTex, SamplerState sampler, int2 coord) {
+    // Check bounds
+    // if (coord.x >= width) return float4(0, 0, 0, 1); // Out of bounds, return black
+
+    // Get base UV from the grid (normalized [0, 1])
+    float2 base_uv = uv_grid;
+
+    // Apply zoom: scale UVs around center (0.5, 0.5)
+    float2 center = float2(0.5, 0.5);
+    float2 uv = center + (base_uv - center) / zoom_factor;
+
+    // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
+    uv = clamp(uv, float2(0.0, 0.0), float2(1.0, 1.0));
+
+    // Evaluate neural model and return color
+    return targetTex.SampleLevel(sampler, uv, 0.0);
 }

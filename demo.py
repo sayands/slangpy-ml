@@ -9,9 +9,14 @@ import math
 from app import App
 
 import cv2
-
+import os
 import time
 
+from matplotlib import pyplot as plt
+import io
+
+
+from PIL import Image
 
 # Assume these are from your provided training script
 from network import (
@@ -32,6 +37,7 @@ def load_model_weights(model, filename):
     for i, layer in enumerate(linear_layers):
         if f"layer_{i}_weights" in weights_dict and f"layer_{i}_biases" in weights_dict:
             # Copy weights and biases to the device
+            print(f"Loading weights for layer {i}")
             layer.weights.storage.copy_from_numpy(weights_dict[f"layer_{i}_weights"])
             layer.biases.storage.copy_from_numpy(weights_dict[f"layer_{i}_biases"])
     
@@ -72,7 +78,7 @@ def create_sphere_indices(rings, sectors):
     return np.array(indices, dtype=np.uint32)
 
 class EarthDemoHeadless:
-    def __init__(self, model_path="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/model_0.npz", width=8192, height=4096):
+    def __init__(self, model_path="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/8192/model_0.npz", width=8192, height=4096):
         # Store dimensions
         self.width = width
         self.height = height
@@ -83,7 +89,7 @@ class EarthDemoHeadless:
         self.device = self.app.device
 
         # Load trained neural model (single LOD)
-        self.model = ModuleChain(
+        self.prev_model = ModuleChain(
             FrequencyEncoding(2, 5),
             LinearLayer(20, 64),
             LeakyReLUAct(64),
@@ -94,7 +100,24 @@ class EarthDemoHeadless:
             LinearLayer(64, 3),
             SigmoidAct(3)
         )
+        self.prev_model.initialize(self.device)
+        # breakpoint()
+        load_model_weights(self.prev_model, model_path)
+
+        self.model = ModuleChain(
+            FrequencyEncoding(5, 5),
+            LinearLayer(50, 64),
+            LeakyReLUAct(64),
+            LinearLayer(64, 64),
+            LeakyReLUAct(64),
+            LinearLayer(64, 64),
+            LeakyReLUAct(64),
+            LinearLayer(64, 3),
+            SigmoidAct(3)
+        )
         self.model.initialize(self.device)
+        model_path_base = "/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/8192"
+        model_path = os.path.join(model_path_base, f"model_1.npz")
         load_model_weights(self.model, model_path)
 
         # Create UV grid
@@ -115,19 +138,29 @@ class EarthDemoHeadless:
         self.input_texture = loader.load_texture('/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/earth.jpg', {"load_as_normalized": True, "generate_mips": True})
         self.sampler = self.device.create_sampler(min_lod=0, max_lod=7)
     
-    def render_frame(self, zoom_factor):
+    def render_frame(self, zoom_factor, use_res=False):
         # Create a buffer to hold the frame data
         frame_data = np.zeros((self.height, self.width, 4), dtype=np.float32)
 
         # Render each pixel by calling renderSphere
         # breakpoint()
-        self.render_module.renderSphere(
-            self.model,
-            self.uv_grid,
-            zoom_factor,
-            call_id(),
-            _result=self.app.output
-        )
+        if use_res:
+            self.render_module.residualRenderSphere(
+                self.model,
+                self.prev_model,
+                self.uv_grid,
+                zoom_factor,
+                call_id(),
+                _result=self.app.output
+            )
+        else:
+            self.render_module.renderSphere(
+                self.prev_model,
+                self.uv_grid,
+                zoom_factor,
+                call_id(),
+                _result=self.app.output
+            )
 
         # self.render_module.renderTex(
         #     self.uv_grid,
@@ -147,8 +180,8 @@ class EarthDemoHeadless:
             sgl.Bitmap.ComponentType.uint8,
             srgb_gamma=True
         )
-        pixel_data = np.array(bitmap_rgb, dtype=np.uint8).reshape(self.width, self.height, 3)
-        img_array = (pixel_data * 255).astype(np.uint8)  # Float [0,1] to uint8 [0,255]
+        bitmap_rgb.write("output.png")
+        img_array = cv2.imread("output.png")
         return img_array
 
     def generate_video(self, output_path="earth_zoom.mp4", duration=5, fps=30):
@@ -159,7 +192,7 @@ class EarthDemoHeadless:
 
         # Initialize video writer
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # MP4 codec
-        video_writer = cv2.VideoWriter(output_path, fourcc, fps, (self.width, self.height))
+        video_writer = cv2.VideoWriter(output_path, fourcc, fps, (640, 480))
 
         # Zoom in: 1.0 to 20.0
         times = []
@@ -168,9 +201,28 @@ class EarthDemoHeadless:
             zoom_factor = 1.0 + (20.0 - 1.0) * t  # Linear interpolation
             start_time = time.time()
             frame = self.render_frame(zoom_factor)
+            frame2 = self.render_frame(zoom_factor, use_res=True)
             times.append(time.time() - start_time)
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            video_writer.write(frame_bgr)
+            # frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            # stack both images side by side in matplotlib. give them title
+            fig, ax = plt.subplots(1, 2)
+            ax[0].imshow(frame)
+            ax[0].set_title('Base Model')
+            ax[1].imshow(frame2)
+            ax[1].set_title('With Residual')           
+            bytesio = io.BytesIO()
+            plt.tight_layout()
+            ax[0].set_xticks([]), ax[0].set_yticks([])
+            ax[1].set_xticks([]), ax[1].set_yticks([])
+
+            plt.savefig('output2.png', format='png')
+            bytesio.seek(0)
+            img_array = cv2.imread('output2.png')
+            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            bytesio.close()
+            plt.close()
+
+            video_writer.write(img_array)
             print(f"Rendered frame {i+1}/{total_frames} (Zoom In: {zoom_factor:.2f}x)")
 
         # Zoom out: 20.0 to 1.0
@@ -179,9 +231,26 @@ class EarthDemoHeadless:
             zoom_factor = 20.0 - (20.0 - 1.0) * t  # Linear interpolation
             start_time = time.time()
             frame = self.render_frame(zoom_factor)
+            frame2 = self.render_frame(zoom_factor, use_res=True)
             times.append(time.time() - start_time)
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            video_writer.write(frame_bgr)
+            # frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            # stack both images side by side in matplotlib. give them title
+            fig, ax = plt.subplots(1, 2)
+            ax[0].imshow(frame)
+            ax[0].set_title('Base Model')
+            ax[1].imshow(frame2)
+            ax[1].set_title('With Residual')     
+            plt.tight_layout()
+            ax[0].set_xticks([]), ax[0].set_yticks([])
+            ax[1].set_xticks([]), ax[1].set_yticks([])      
+            buffer = io.BytesIO()
+            plt.savefig('output2.png', format='png')
+            plt.close()
+            buffer.seek(0)
+            img_array = cv2.imread('output2.png')
+            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            buffer.close()
+            video_writer.write(img_array)
             print(f"Rendered frame {zoom_in_frames+i+1}/{total_frames} (Zoom Out: {zoom_factor:.2f}x)")
 
         # Release video writer
@@ -190,5 +259,5 @@ class EarthDemoHeadless:
         print(f"Average render time: {np.mean(times):.4f}s")
 
 if __name__ == "__main__":
-    demo = EarthDemoHeadless(model_path="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/model_0.npz", width=512, height=512)
+    demo = EarthDemoHeadless(model_path="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/8192/model_0.npz", width=512, height=512)
     demo.generate_video(output_path="earth_zoom.mp4", duration=5, fps=30)

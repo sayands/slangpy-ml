@@ -107,7 +107,7 @@ float4 sampleMip(float2 inputUV, Texture2D<float4> targetTex, SamplerState sampl
 }
 
 
-float4 renderSphere<Model : IModule<float, 2, 3>>(Model model, float2 uv_grid, float zoom_factor, int2 coord) {
+float4 residualRenderSphere<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, float2 uv_grid, float zoom_factor, int2 coord) {
     // Check bounds
     // if (coord.x >= width) return float4(0, 0, 0, 1); // Out of bounds, return black
 
@@ -115,7 +115,25 @@ float4 renderSphere<Model : IModule<float, 2, 3>>(Model model, float2 uv_grid, f
     float2 base_uv = uv_grid;
 
     // Apply zoom: scale UVs around center (0.5, 0.5)
-    float2 center = float2(0.5, 0.5);
+    float2 center = float2(0.166, 0.3);
+    float2 uv = center + (base_uv - center) / zoom_factor;
+
+    // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
+    uv = clamp(uv, float2(0.0, 0.0), float2(1.0, 1.0));
+
+    // Evaluate neural model and return color
+    return residualEvalModel(model, prev_model, uv);
+}
+
+float4 renderSphere<Model : IModule<float, 2, 3>>(Model model,float2 uv_grid, float zoom_factor, int2 coord) {
+    // Check bounds
+    // if (coord.x >= width) return float4(0, 0, 0, 1); // Out of bounds, return black
+
+    // Get base UV from the grid (normalized [0, 1])
+    float2 base_uv = uv_grid;
+
+    // Apply zoom: scale UVs around center (0.5, 0.5)
+    float2 center = float2(0.166, 0.3);
     float2 uv = center + (base_uv - center) / zoom_factor;
 
     // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
@@ -134,7 +152,7 @@ float4 renderTex(float2 uv_grid, float rotation_angle, float zoom_factor,  Textu
     float2 base_uv = uv_grid;
 
     // Apply zoom: scale UVs around center (0.5, 0.5)
-    float2 center = float2(0.5, 0.5);
+    float2 center = float2(0.166, 0.3);
     float2 uv = center + (base_uv - center) / zoom_factor;
 
     // Clamp UVs to [0, 1] to avoid out-of-bounds sampling

@@ -106,7 +106,7 @@ def make_plot(data_nn, data_gt, resolutions, plot_name, texture_name):
 
     # Display the plot
     plt.tight_layout()
-    plt.savefig(f'{plot_name}.png')
+    plt.savefig(f'{plot_name}.pdf')
     
 
 if __name__ == "__main__":

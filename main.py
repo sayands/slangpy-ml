@@ -25,7 +25,7 @@ from network import (
 from utils import model_util, timer, uv_util
 
 def training_main(max_epochs=100, mipmap_level=0):
-    resolution = 512 # depends on the resolution of the input image
+    resolution = 8192 # depends on the resolution of the input image
     
     app = App("Neural Texture", device_type=DeviceType.vulkan, width=resolution, height=resolution)
     device = app.device
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Neural Texture Generator")
     parser.add_argument("--mode", choices=["train", "inference"], default="train",
                         help="Whether to train a model or run inference")
-    parser.add_argument("--save_dir", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth",
+    parser.add_argument("--save_dir", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/8192",
                         help="Path to save or load model weights")
     parser.add_argument("--output", default="output.png",
                         help="Path for the output image in inference mode")
@@ -196,7 +196,7 @@ if __name__ == "__main__":
                         help="Resolution of the output image")
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
-    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth",
+    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/",
                         help="Base path for model weights")
     
     parser.add_argument("--mipmap_level", type=float, default=0,

@@ -14,6 +14,10 @@ from network import (
     SwishAct, TanhAct
 )
 
+import os
+from glob import glob
+from time import time
+
 
 def load_model_weights(model, filename):
     """Load model weights from a file."""
@@ -103,23 +107,31 @@ camera = Camera(app)
 
 # Load texture
 loader = TextureLoader(device)
-texture = loader.load_texture("/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/checkerboard.png", {"load_as_normalized": True, "generate_mips": True})
+texture = loader.load_texture("/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/bernie.jpg", {"load_as_normalized": True, "generate_mips": True})
 sampler = device.create_sampler(min_lod=0, max_lod=7)
 
-# Load Neural Texture
-model = ModuleChain(
-    FrequencyEncoding(2, 5),
-    LinearLayer(20, 64),
-    LeakyReLUAct(64),
-    LinearLayer(64, 64),
-    LeakyReLUAct(64),
-    LinearLayer(64, 64),
-    LeakyReLUAct(64),
-    LinearLayer(64, 3),
-    SigmoidAct(3)
-)
-model.initialize(device)
-load_model_weights(model, '/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/checkerboard/model_0.npz')
+# Load Neural Textures
+models = []
+base_path = os.path.join('/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/bernie')
+#number of models in base path
+model_paths = sorted(glob(os.path.join(base_path, 'model_*.npz')))
+for model_path in model_paths:
+    model = ModuleChain(
+        FrequencyEncoding(2, 5),
+        LinearLayer(20, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 3),
+        SigmoidAct(3)
+    )
+    model.initialize(device)
+    load_model_weights(model, model_path)
+    models.append(model)
+
+num_models = len(models)
 
 # Define vertices with UVs
 depth = 0.0
@@ -167,7 +179,17 @@ for frame in range(num_frames):
     
     # Render the frame
     time_start = time()
-    rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, model, call_id(), _result=app.output)
+    all_lods = []
+    for model in models:
+        rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, model, call_id(), _result=app.output)
+        bitmap = app.output.to_bitmap()
+        bitmap_rgb = bitmap.convert(
+            sgl.Bitmap.PixelFormat.rgb,
+            sgl.Bitmap.ComponentType.uint8,
+            srgb_gamma=True
+        )
+        pixel_data = np.array(bitmap_rgb, dtype=np.uint8).reshape(height, width, 3)
+        all_lods.append(pixel_data)
     total_time = time() - time_start
     render_times.append(total_time)
 

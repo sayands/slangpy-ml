@@ -17,3 +17,6 @@ dist/
 checkpoints/
 inputs/
 outputs/
+
+*.mp4
+*.obj

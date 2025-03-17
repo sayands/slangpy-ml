@@ -59,19 +59,18 @@ def training_main(max_epochs=100, mipmap_level=0):
     rng = module.RNG(seeds)
 
     loader = TextureLoader(device)
-    target_tex = loader.load_texture("inputs/texture.jpg", {"load_as_normalized": True, "generate_mips": True})
+    target_tex = loader.load_texture("inputs/earth.jpg", {"load_as_normalized": True, "generate_mips": True})
     sampler = device.create_sampler(min_lod=0, max_lod=7)
     
-
     epoch_count = 0
-    timer = timer.Timer()
+    _timer = timer.Timer()
     cmd = device.create_command_buffer()
 
     while app.process_events(): # Change to while True for headless training
         if epoch_count >= max_epochs:
             print(f"Reached maximum epochs ({max_epochs}). Stopping training.")
             break
-        timer.start()
+        _timer.start()
 
         # Prefetch functions so we don't do module lookups in a tight loop
         train = module.trainTexture
@@ -93,14 +92,14 @@ def training_main(max_epochs=100, mipmap_level=0):
         msamples = (num_batches_per_epoch * math.prod(batch_shape)) * 1e-6
         epoch_count += 1
         
-        print(f"Epoch {epoch_count}/{max_epochs} - Throughput: {timer.frequency() * msamples:.2f} MSamples/s "
-              f"Epoch time: {timer.elapsed() * 1e3:.1f}ms")
+        print(f"Epoch {epoch_count}/{max_epochs} - Throughput: {_timer.frequency() * msamples:.2f} MSamples/s "
+              f"Epoch time: {_timer.elapsed() * 1e3:.1f}ms")
 
         # Evaluate the model once per epoch, comment below 2 lines for headless training
         # module.evalModel(model, uv_grid, _result=app.output)
         # app.present()
 
-        timer.stop()
+        _timer.stop()
 
     device.wait()
     device.run_garbage_collection()
@@ -158,15 +157,10 @@ def inference_main(model_path_base, lod, output_image_path, resolution=512):
     
     # Load the module for evaluation
     module = Module.load_from_file(device, "NeuralTexture.slang")
-
     device.wait()
     
-    timer = timer.Timer()
-    timer.start()
     # Evaluate the model once to generate the texture
     module.evalMipLevel(floor_model, ceil_model, uv_grid, alpha, _result=app.output)
-    timer.stop()
-    print(f"Model evaluation time: {timer.elapsed() * 1e3:.1f}ms")
 
     # Convert the output texture to a bitmap and save it
     bitmap = app.output.to_bitmap()
@@ -194,7 +188,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Neural Texture Generator")
     parser.add_argument("--mode", choices=["train", "inference"], default="train",
                         help="Whether to train a model or run inference")
-    parser.add_argument("--save_dir", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints",
+    parser.add_argument("--save_dir", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth",
                         help="Path to save or load model weights")
     parser.add_argument("--output", default="output.png",
                         help="Path for the output image in inference mode")
@@ -202,7 +196,7 @@ if __name__ == "__main__":
                         help="Resolution of the output image")
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
-    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/texture",
+    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth",
                         help="Base path for model weights")
     
     parser.add_argument("--mipmap_level", type=float, default=0,

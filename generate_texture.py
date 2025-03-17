@@ -30,7 +30,7 @@ def generate_checkerboard():
 
 def generate_perlin_texture():
     # Parameters
-    resolution = 256 * 32 
+    resolution = 256 * 4 
     scale = 100.0  # Controls the frequency of the noise
 
     # Generate Perlin noise

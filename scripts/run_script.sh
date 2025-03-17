@@ -6,6 +6,8 @@
 #     xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level $mipmap_level
 # done
 
+xvfb-run python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level $mipmap_level
+
 # Inference
 # for mipmap_level in {0..14}
 # do

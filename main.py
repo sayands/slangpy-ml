@@ -105,7 +105,7 @@ def training_main(max_epochs=100, mipmap_level=0):
     device.run_garbage_collection()
     return model
 
-def inference_main(model_path_base, lod, output_image_path, resolution=512):
+def inference_main(model_path_base, lod, output_image_path, resolution=8192):
     """Run inference with a saved model and save the output as an image."""
     # Create app with window, just like in training
     app = App("Neural Texture Inference", device_type=DeviceType.vulkan, width=resolution, height=resolution)
@@ -177,6 +177,58 @@ def inference_main(model_path_base, lod, output_image_path, resolution=512):
     #     app.present()
     #     time.sleep(0.01) 
     
+
+def inference_earth(model_path_base, output_image_path, resolution=8192):
+    """Run inference with a saved model and save the output as an image."""
+    # Create app with window, just like in training
+    app = App("Neural Texture Inference", device_type=DeviceType.vulkan, width=resolution, height=resolution)
+    device = app.device
+    
+    # Create the model with the same architecture as during training
+    model = ModuleChain(
+        FrequencyEncoding(2, 5),
+        LinearLayer(20, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 64),
+        LeakyReLUAct(64),
+        LinearLayer(64, 3),
+        SigmoidAct(3)
+    )
+
+    
+    # Initialize the model (allocate storage for parameters)
+    model.initialize(device)
+    
+    model_path = os.path.join(model_path_base, "model_0.npz")
+    model_util.load_model_weights(model, model_path)
+    
+    # Create a UV grid for evaluation, just like in training
+    uv_grid = uv_util.create_uv_grid(device, resolution)
+    
+    # Load the module for evaluation
+    module = Module.load_from_file(device, "NeuralTexture.slang")
+    device.wait()
+    
+    # Evaluate the model once to generate the texture
+    module.evalModel(model, uv_grid, _result=app.output)
+
+    # Convert the output texture to a bitmap and save it
+    bitmap = app.output.to_bitmap()
+    bitmap.convert(
+        sgl.Bitmap.PixelFormat.rgb,
+        sgl.Bitmap.ComponentType.uint8,
+        srgb_gamma=True
+    ).write(output_image_path)
+    print(f"Output image saved to {output_image_path}")
+
+    # # Present the result and keep the window open
+    # while app.process_events():
+    #     # Keep presenting the result
+    #     app.present()
+    #     time.sleep(0.01) 
+    
 """
 Scripts for training and inference with the neural texture generator.
 python main.py --mode train --max_epochs 100 --save_path my_model.npz
@@ -196,7 +248,7 @@ if __name__ == "__main__":
                         help="Resolution of the output image")
     parser.add_argument("--max_epochs", type=int, default=100,
                         help="Maximum number of epochs for training")
-    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/",
+    parser.add_argument("--model_path_base", default="/mnt/sdb/tejan/code/sayan_code/slangpy-ml/checkpoints/earth/8192",
                         help="Base path for model weights")
     
     parser.add_argument("--mipmap_level", type=float, default=0,
@@ -215,5 +267,6 @@ if __name__ == "__main__":
         model_util.save_model_weights(model, save_path)
     else:
         # Run inference
-        inference_main(args.model_path_base, args.mipmap_level, output_image_path=args.output, resolution=args.resolution)
+        inference_earth(args.model_path_base, args.output, resolution=8192)
+        # inference_main(args.model_path_base, args.mipmap_level, output_image_path=args.output, resolution=args.resolution)
 

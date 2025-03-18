@@ -25,3 +25,13 @@ python run_gt.py --input input_path --output output_path --resolution 512 --mipm
 python eval_runtime_inference.py (to evaluate runtime)
 python eval.py (to evaluate quality)
 ```
+
+### Demo
+#### Earth demo
+```bash
+xvfb-run -a python demo.py
+```
+#### Rasteriser
+```bash
+xvfb-run -a python rasterizer.py
+```

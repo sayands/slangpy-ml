@@ -12,13 +12,13 @@ import sgl
 from slangpy import Module
 from slangpy.backend import Device, DeviceType, TextureLoader
 from slangpy.types import NDBuffer
-from main import Timer
+from utils.timer import Timer
 
 # Local application imports
 from app import App
 
 def run_groundtruth(input_path, output_path, mipmap_level: float = 0):
-    resolution = 512 # depends on the resolution of the input image
+    resolution = 8192 # depends on the resolution of the input image
     timer = Timer()
     
     app = App("Neural Texture", device_type=DeviceType.vulkan, width=resolution, height=resolution)

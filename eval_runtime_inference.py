@@ -98,15 +98,21 @@ def make_plot(data_nn, data_gt, resolutions, plot_name, texture_name):
     else:
         raise NotImplementedError
 
+    # plt.yscale('log')
     # Adding grid
+    # Add a uniform grid
     plt.grid(True, which="both", ls="--", linewidth=0.5)
+
+    # Ensure the grid aligns with the ticks
+    # ax = plt.gca()
+    # ax.yaxis.set_major_locator(plt.LogLocator(base=10))  # Align grid with logarithmic y-axis
 
     # Adding legend
     plt.legend(fontsize=12)
 
     # Display the plot
     plt.tight_layout()
-    plt.savefig(f'{plot_name}.pdf')
+    plt.savefig(f'{plot_name}.png')
     
 
 if __name__ == "__main__":

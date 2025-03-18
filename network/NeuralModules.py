@@ -80,6 +80,45 @@ class ModuleChain(NeuralModule):
     def modules(self) -> list[NeuralModule]:
         return sum((m.modules() for m in self.chain), start=[self])
 
+# Accepts a list of modulechains. first module chain takes uv input. every other module chain takes the output of the previous module chain as well as uv.
+# each module chain's last 3 outputs are expected to be r, g, b.
+# final output is the mean of the r, g, b outputs of the last module chain.
+class MultiModuleChain:
+    def __init__(self, *module_chains: ModuleChain):
+        if len(module_chains) == 0:
+            raise ValueError("MultiModuleChain needs at least one module chain")
+
+        self.module_chains = list(module_chains)
+        self.dtype = module_chains[0].dtype
+        self.fan_in = module_chains[0].fan_in
+        self.fan_out = module_chains[-1].fan_out
+        self.num_chains = len(self.module_chains)
+    
+    def initialize(self, device: Device):
+        for m in self.module_chains:
+            m.initialize(device)
+
+    def parameters(self) -> list[Tensor]:
+        return sum((m.parameters() for m in self.module_chains), start=[])
+    
+    def get_this(self):
+        result = self.module_chains[1].get_this()
+
+        first = self.module_chains[0].get_this()
+        type_name = ("MultiModuleChain<"
+                        f"{dtype_name(self.dtype)}, "
+                        f"{self.module_chains[0].fan_in}, {self.module_chains[-1].fan_out}, {self.module_chains[0].fan_in+3}, {len(self.module_chains)}, "
+                        f"{first['_type']}, {result['_type']}> ")
+        result = {
+            "_type": type_name,
+            "first": first,
+            "second": [m.get_this() for m in self.module_chains[1:]],
+        }
+        return result
+    
+    def modules(self) -> list[NeuralModule]:
+        return sum((m.modules() for m in self.module_chains), start=[self])
+
 
 # Frequency encoding that maps each input parameter into a series
 # of sines and cosines with increasing frequency

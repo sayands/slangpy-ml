@@ -46,15 +46,6 @@ float4 evalModel<Model : IModule<float, 2, 3>>(Model model, float2 inputUV)
     return float4(prediction, 1.0f);
 }
 
-float4 residualEvalModel<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, float2 inputUV)
-{
-    float3 color = prev_model.forward(inputUV);
-    vector<float, 5> input_res = { inputUV[0], inputUV[1], color[0], color[1], color[2] };
-    float3 prediction = color + float3(model.forward(input_res));
-
-    return float4(prediction, 1.0f);
-}
-
 [BackwardDifferentiable]
 float evalModelAndLoss<Model : IModule<float, 2, 3>>(Model model, no_diff float2 input, no_diff float3 target)
 {
@@ -70,6 +61,15 @@ void trainTexture<Model : IModule<float, 2, 3>>(Model model, inout RNG rng, Text
     float4 target = targetTex.SampleLevel(sampler, inputUV, float(mipmapLevel));
 
     bwd_diff(evalModelAndLoss)(model, inputUV, target.rgb, lossScale);
+}
+
+float4 residualEvalModel<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, float2 inputUV)
+{
+    float3 color = prev_model.forward(inputUV);
+    vector<float, 5> input_res = { inputUV[0], inputUV[1], color[0], color[1], color[2] };
+    float3 prediction = color + float3(model.forward(input_res));
+
+    return float4(prediction, 1.0f);
 }
 
 [BackwardDifferentiable]
@@ -107,7 +107,7 @@ float4 sampleMip(float2 inputUV, Texture2D<float4> targetTex, SamplerState sampl
 }
 
 
-float4 residualRenderSphere<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, float2 uv_grid, float zoom_factor, int2 coord) {
+float4 residualRenderSphere<PrevModel : IModule<float, 2, 3>, Model : IModule<float, 5, 3>>(Model model, PrevModel prev_model, float2 uv_grid, float zoom_factor, float center_u, float center_v, int2 coord) {
     // Check bounds
     // if (coord.x >= width) return float4(0, 0, 0, 1); // Out of bounds, return black
 
@@ -115,7 +115,7 @@ float4 residualRenderSphere<PrevModel : IModule<float, 2, 3>, Model : IModule<fl
     float2 base_uv = uv_grid;
 
     // Apply zoom: scale UVs around center (0.5, 0.5)
-    float2 center = float2(0.166, 0.3);
+    float2 center = float2(center_u, center_v);
     float2 uv = center + (base_uv - center) / zoom_factor;
 
     // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
@@ -125,7 +125,7 @@ float4 residualRenderSphere<PrevModel : IModule<float, 2, 3>, Model : IModule<fl
     return residualEvalModel(model, prev_model, uv);
 }
 
-float4 renderSphere<Model : IModule<float, 2, 3>>(Model model,float2 uv_grid, float zoom_factor, int2 coord) {
+float4 renderSphere<Model : IModule<float, 2, 3>>(Model model,float2 uv_grid, float zoom_factor, float center_u, float center_v, int2 coord) {
     // Check bounds
     // if (coord.x >= width) return float4(0, 0, 0, 1); // Out of bounds, return black
 
@@ -133,7 +133,7 @@ float4 renderSphere<Model : IModule<float, 2, 3>>(Model model,float2 uv_grid, fl
     float2 base_uv = uv_grid;
 
     // Apply zoom: scale UVs around center (0.5, 0.5)
-    float2 center = float2(0.166, 0.3);
+    float2 center = float2(center_u, center_v);
     float2 uv = center + (base_uv - center) / zoom_factor;
 
     // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
@@ -144,7 +144,7 @@ float4 renderSphere<Model : IModule<float, 2, 3>>(Model model,float2 uv_grid, fl
 }
 
 
-float4 renderTex(float2 uv_grid, float rotation_angle, float zoom_factor,  Texture2D<float4> targetTex, SamplerState sampler, int2 coord) {
+float4 renderTex(float2 uv_grid, float rotation_angle, float zoom_factor,  Texture2D<float4> targetTex, SamplerState sampler, float center_u, float center_v, int2 coord) {
     // Check bounds
     // if (coord.x >= width) return float4(0, 0, 0, 1); // Out of bounds, return black
 
@@ -152,7 +152,7 @@ float4 renderTex(float2 uv_grid, float rotation_angle, float zoom_factor,  Textu
     float2 base_uv = uv_grid;
 
     // Apply zoom: scale UVs around center (0.5, 0.5)
-    float2 center = float2(0.166, 0.3);
+    float2 center = float2(center_u, center_v);
     float2 uv = center + (base_uv - center) / zoom_factor;
 
     // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
@@ -161,3 +161,44 @@ float4 renderTex(float2 uv_grid, float rotation_angle, float zoom_factor,  Textu
     // Evaluate neural model and return color
     return targetTex.SampleLevel(sampler, uv, 0.0);
 }
+
+// float4 evalModelMulti<Model : IMultiModule<float, 2, 3, 5, 2>>(Model model, float2 inputUV)
+// {
+//     float[2] input = { inputUV.x, inputUV.y };
+//     let prediction = model.forward(input);
+//     return float4(prediction[0], prediction[1], prediction[2], 1.0f);
+// }
+
+// [BackwardDifferentiable]
+// float evalModelAndLossMulti<Model : IMultiModule<float, 2, 3, 5, 2>>(Model model, no_diff float2 inputUV, no_diff float3 target)
+// {
+//     let lossFunc = L2Loss();
+//     float[2] input = { inputUV.x, inputUV.y };
+//     float[3] prediction = model.forward(input);
+//     float3 pred = float3(prediction[0], prediction[1], prediction[2]);
+
+//     return lossFunc.eval(pred, target);
+// }
+
+// void trainTextureMulti<Model : IMultiModule<float, 2, 3, 5, 2>>(Model model, inout RNG rng, Texture2D<float4> targetTex, SamplerState sampler, float mipmapLevel, float lossScale)
+// {
+//     float2 inputUV = rng.next2D();
+//     float4 target = targetTex.SampleLevel(sampler, inputUV, float(mipmapLevel));
+
+//     bwd_diff(evalModelAndLossMulti)(model, inputUV, target.rgb, lossScale);
+// }
+
+// float4 renderSphereMulti<Model : IMultiModule<float, 2, 3, 5, 2>>(Model model, float2 uv_grid, float zoom_factor, int2 coord) {
+//     // Get base UV from the grid (normalized [0, 1])
+//     float2 base_uv = uv_grid;
+
+//     // Apply zoom: scale UVs around center
+//     float2 center = float2(0.166, 0.3);
+//     float2 uv = center + (base_uv - center) / zoom_factor;
+
+//     // Clamp UVs to [0, 1] to avoid out-of-bounds sampling
+//     uv = clamp(uv, float2(0.0, 0.0), float2(1.0, 1.0));
+
+//     // Evaluate neural model and return color
+//     return evalModelMulti(model, uv);
+// }

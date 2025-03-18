@@ -140,14 +140,13 @@ base_v1 = sgl.float3(-0.5, 0.5, depth)  # Top-left
 base_v2 = sgl.float3(0.5, 0.5, depth)   # Top-right
 base_v3 = sgl.float3(0.5, -0.5, depth)  # Bottom-right
 
-uv0 = sgl.float2(0.0, 0.0) # Bottom-left
-uv1 = sgl.float2(0.0, 1.0) # Top-left
-uv2 = sgl.float2(1.0, 1.0) # Top-right
-uv3 = sgl.float2(1.0, 0.0) # Bottom-right
-
+uv0 = sgl.float2(0.0, 1.0)  # Bottom-left
+uv1 = sgl.float2(1.0, 0.0)  # Top-left
+uv2 = sgl.float2(0.0, 0.0)  # Top-right
+uv3 = sgl.float2(1.0, 1.0)  # Bottom-right
 uv_triangles = [
     [uv0, uv1, uv2],
-    [uv0, uv2, uv3]
+    [uv0, uv3, uv1]
 ]
 
 # Animation parameters
@@ -180,20 +179,7 @@ for frame in range(num_frames):
     # Render the frame
     time_start = time()
     all_lods = []
-    for model in models:
-        rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, model, call_id(), _result=app.output)
-        bitmap = app.output.to_bitmap()
-        bitmap_rgb = bitmap.convert(
-            sgl.Bitmap.PixelFormat.rgb,
-            sgl.Bitmap.ComponentType.uint8,
-            srgb_gamma=True
-        )
-        pixel_data = np.array(bitmap_rgb, dtype=np.uint8).reshape(height, width, 3)
-        all_lods.append(pixel_data)
-    total_time = time() - time_start
-    render_times.append(total_time)
-
-    # Extract pixel data
+    rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, models[0], call_id(), _result=app.output)
     bitmap = app.output.to_bitmap()
     bitmap_rgb = bitmap.convert(
         sgl.Bitmap.PixelFormat.rgb,
@@ -201,11 +187,69 @@ for frame in range(num_frames):
         srgb_gamma=True
     )
     pixel_data = np.array(bitmap_rgb, dtype=np.uint8).reshape(height, width, 3)
+    all_lods.append(pixel_data)
+    total_time = time() - time_start
+    render_times.append(total_time)
+
+    # # Extract pixel data
+    # bitmap = app.output.to_bitmap()
+    # bitmap_rgb = bitmap.convert(
+    #     sgl.Bitmap.PixelFormat.rgb,
+    #     sgl.Bitmap.ComponentType.uint8,
+    #     srgb_gamma=True
+    # )
+    # pixel_data = np.array(bitmap_rgb, dtype=np.uint8).reshape(height, width, 3)
     frame_data = cv2.cvtColor(pixel_data, cv2.COLOR_RGB2BGR)
     
     # Write frame to video
     if frame != num_frames - 1:
         video_writer.write(frame_data)
+    
+    # Optional: Print progress
+    if frame % 10 == 0:
+        print(f"Frame {frame}/{num_frames} at angle {np.degrees(angle):.1f}°")
+
+for frame in range(num_frames-2, -1, -1):
+    angle = -frame * angle_step
+    
+    # Rotate vertices
+    v0 = rotate_vertex(base_v0, angle)
+    v1 = rotate_vertex(base_v1, angle)
+    v2 = rotate_vertex(base_v2, angle)
+    v3 = rotate_vertex(base_v3, angle)
+    
+    triangle1 = [v0, v1, v2]
+    triangle2 = [v0, v2, v3]
+    triangles = [triangle1, triangle2]
+    num_triangles = len(triangles)
+    
+    # Render the frame
+    time_start = time()
+    all_lods = []
+    rasterizer2d.rasterize(camera.get_this(), triangles, uv_triangles, num_triangles, texture, sampler, models[0], call_id(), _result=app.output)
+    bitmap = app.output.to_bitmap()
+    bitmap_rgb = bitmap.convert(
+        sgl.Bitmap.PixelFormat.rgb,
+        sgl.Bitmap.ComponentType.uint8,
+        srgb_gamma=True
+    )
+    pixel_data = np.array(bitmap_rgb, dtype=np.uint8).reshape(height, width, 3)
+    all_lods.append(pixel_data)
+    total_time = time() - time_start
+    render_times.append(total_time)
+
+    # # Extract pixel data
+    # bitmap = app.output.to_bitmap()
+    # bitmap_rgb = bitmap.convert(
+    #     sgl.Bitmap.PixelFormat.rgb,
+    #     sgl.Bitmap.ComponentType.uint8,
+    #     srgb_gamma=True
+    # )
+    # pixel_data = np.array(bitmap_rgb, dtype=np.uint8).reshape(height, width, 3)
+    frame_data = cv2.cvtColor(pixel_data, cv2.COLOR_RGB2BGR)
+    
+    # Write frame to video
+    video_writer.write(frame_data)
     
     # Optional: Print progress
     if frame % 10 == 0:

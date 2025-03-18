@@ -138,7 +138,7 @@ class EarthDemoHeadless:
         self.input_texture = loader.load_texture('/mnt/sdb/tejan/code/sayan_code/slangpy-ml/inputs/earth.jpg', {"load_as_normalized": True, "generate_mips": True})
         self.sampler = self.device.create_sampler(min_lod=0, max_lod=7)
     
-    def render_frame(self, zoom_factor, use_res=False):
+    def render_frame(self, zoom_factor, center_u, center_v, use_res=False):
         # Create a buffer to hold the frame data
         frame_data = np.zeros((self.height, self.width, 4), dtype=np.float32)
 
@@ -150,6 +150,7 @@ class EarthDemoHeadless:
                 self.prev_model,
                 self.uv_grid,
                 zoom_factor,
+                center_u, center_v,
                 call_id(),
                 _result=self.app.output
             )
@@ -158,6 +159,7 @@ class EarthDemoHeadless:
                 self.prev_model,
                 self.uv_grid,
                 zoom_factor,
+                center_u, center_v,
                 call_id(),
                 _result=self.app.output
             )
@@ -196,62 +198,64 @@ class EarthDemoHeadless:
 
         # Zoom in: 1.0 to 20.0
         times = []
-        for i in range(zoom_in_frames):
-            t = i / (zoom_in_frames - 1) if zoom_in_frames > 1 else 0  # Normalized time [0, 1]
-            zoom_factor = 1.0 + (20.0 - 1.0) * t  # Linear interpolation
-            start_time = time.time()
-            frame = self.render_frame(zoom_factor)
-            frame2 = self.render_frame(zoom_factor, use_res=True)
-            times.append(time.time() - start_time)
-            # frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            # stack both images side by side in matplotlib. give them title
-            fig, ax = plt.subplots(1, 2)
-            ax[0].imshow(frame)
-            ax[0].set_title('Base Model')
-            ax[1].imshow(frame2)
-            ax[1].set_title('With Residual')           
-            bytesio = io.BytesIO()
-            plt.tight_layout()
-            ax[0].set_xticks([]), ax[0].set_yticks([])
-            ax[1].set_xticks([]), ax[1].set_yticks([])
+        centers = [(0.167, 0.3), (0.72, 0.37), (0.9, 0.69)]
+        for center_u, center_v in centers:
+            for i in range(zoom_in_frames):
+                t = i / (zoom_in_frames - 1) if zoom_in_frames > 1 else 0  # Normalized time [0, 1]
+                zoom_factor = 1.0 + (20.0 - 1.0) * t  # Linear interpolation
+                start_time = time.time()
+                frame = self.render_frame(zoom_factor, center_u, center_v)
+                frame2 = self.render_frame(zoom_factor, center_u, center_v, use_res=True)
+                times.append(time.time() - start_time)
+                # frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                # stack both images side by side in matplotlib. give them title
+                fig, ax = plt.subplots(1, 2)
+                ax[0].imshow(frame)
+                ax[0].set_title('Base Model')
+                ax[1].imshow(frame2)
+                ax[1].set_title('With Residual')           
+                bytesio = io.BytesIO()
+                plt.tight_layout()
+                ax[0].set_xticks([]), ax[0].set_yticks([])
+                ax[1].set_xticks([]), ax[1].set_yticks([])
 
-            plt.savefig('output2.png', format='png')
-            bytesio.seek(0)
-            img_array = cv2.imread('output2.png')
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-            bytesio.close()
-            plt.close()
+                plt.savefig('output2.png', format='png')
+                bytesio.seek(0)
+                img_array = cv2.imread('output2.png')
+                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                bytesio.close()
+                plt.close()
 
-            video_writer.write(img_array)
-            print(f"Rendered frame {i+1}/{total_frames} (Zoom In: {zoom_factor:.2f}x)")
+                video_writer.write(img_array)
+                print(f"Rendered frame {i+1}/{total_frames} (Zoom In: {zoom_factor:.2f}x)")
 
-        # Zoom out: 20.0 to 1.0
-        for i in range(zoom_out_frames):
-            t = i / (zoom_out_frames - 1) if zoom_out_frames > 1 else 0  # Normalized time [0, 1]
-            zoom_factor = 20.0 - (20.0 - 1.0) * t  # Linear interpolation
-            start_time = time.time()
-            frame = self.render_frame(zoom_factor)
-            frame2 = self.render_frame(zoom_factor, use_res=True)
-            times.append(time.time() - start_time)
-            # frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            # stack both images side by side in matplotlib. give them title
-            fig, ax = plt.subplots(1, 2)
-            ax[0].imshow(frame)
-            ax[0].set_title('Base Model')
-            ax[1].imshow(frame2)
-            ax[1].set_title('With Residual')     
-            plt.tight_layout()
-            ax[0].set_xticks([]), ax[0].set_yticks([])
-            ax[1].set_xticks([]), ax[1].set_yticks([])      
-            buffer = io.BytesIO()
-            plt.savefig('output2.png', format='png')
-            plt.close()
-            buffer.seek(0)
-            img_array = cv2.imread('output2.png')
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-            buffer.close()
-            video_writer.write(img_array)
-            print(f"Rendered frame {zoom_in_frames+i+1}/{total_frames} (Zoom Out: {zoom_factor:.2f}x)")
+            # Zoom out: 20.0 to 1.0
+            for i in range(zoom_out_frames):
+                t = i / (zoom_out_frames - 1) if zoom_out_frames > 1 else 0  # Normalized time [0, 1]
+                zoom_factor = 20.0 - (20.0 - 1.0) * t  # Linear interpolation
+                start_time = time.time()
+                frame = self.render_frame(zoom_factor, center_u, center_v)
+                frame2 = self.render_frame(zoom_factor, center_u, center_v, use_res=True)
+                times.append(time.time() - start_time)
+                # frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                # stack both images side by side in matplotlib. give them title
+                fig, ax = plt.subplots(1, 2)
+                ax[0].imshow(frame)
+                ax[0].set_title('Base Model')
+                ax[1].imshow(frame2)
+                ax[1].set_title('With Residual')     
+                plt.tight_layout()
+                ax[0].set_xticks([]), ax[0].set_yticks([])
+                ax[1].set_xticks([]), ax[1].set_yticks([])      
+                buffer = io.BytesIO()
+                plt.savefig('output2.png', format='png')
+                plt.close()
+                buffer.seek(0)
+                img_array = cv2.imread('output2.png')
+                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                buffer.close()
+                video_writer.write(img_array)
+                print(f"Rendered frame {zoom_in_frames+i+1}/{total_frames} (Zoom Out: {zoom_factor:.2f}x)")
 
         # Release video writer
         video_writer.release()

@@ -1,18 +1,27 @@
-# copy-of-slangpy-neuralnetwork
+# Neural Texture Compression with Slang
 
-This is just a copy of https://github.com/shader-slang/slangpy/tree/main/experiments/neuralnetwork
-
-The difference is that `main.py` has additional functions to save and load the model weights, and do training and inference separately.
-Feel free to use the code in main.py to get you started.
-
-Please refer to https://github.com/shader-slang/slangpy/tree/main for more information about **SlangPy**, including documentation and other examples.
+Modified from: https://github.com/shader-slang/slangpy/tree/main/experiments/neuralnetwork
 
 ## Scripts
 Here are some scripts for training and inference with the neural texture generator.
 
 ```bash
-python main.py --mode train --max_epochs 100 --save_path my_model.npz
-python main.py --mode inference --save_path my_model.npz --output my_result.png
+python main.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level $mipmap_level
+python main.py --mode inference --mipmap_level=$mipmap_level_float --output output_path/output$mipmap_level_float.png --resolution 512
+```
+This will save the relevant generated texture at `mipmap_level_float` to the `output_path`.
+
+### Training Residual Model
+```bash
+python main_res.py --mode train --max_epochs 1000 --save_dir checkpoints/ --mipmap_level 0
 ```
 
-You should observe `my_result.png` to be a blurred version of `bernie.jpg`.
+This script assumes that the base model is trained and saved.
+
+### Evaluation
+
+```bash
+python run_gt.py --input input_path --output output_path --resolution 512 --mipmap_level=$mipmap_level_float (to run groundtruth)
+python eval_runtime_inference.py (to evaluate runtime)
+python eval.py (to evaluate quality)
+```
